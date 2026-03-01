@@ -1,0 +1,95 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { z } from 'zod';
+
+const joinWaitlistSchema = z.object({
+  coach_member_id: z.string().uuid(),
+  lesson_type_id: z.string().uuid(),
+  desired_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  desired_start_time: z.string().optional(),
+  desired_end_time: z.string().optional(),
+  player_member_id: z.string().uuid(),
+});
+
+export async function GET() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { data: member } = await supabase
+    .from('club_members')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+    .single();
+
+  if (!member) return NextResponse.json({ error: 'No membership' }, { status: 403 });
+
+  const { data } = await supabase
+    .from('waitlist_entries')
+    .select('*, coach:club_members!waitlist_entries_coach_member_id_fkey(display_name), lesson_types(name)')
+    .or(`player_member_id.eq.${member.id},booked_by_member_id.eq.${member.id}`)
+    .in('status', ['waiting', 'notified'])
+    .order('created_at', { ascending: false });
+
+  return NextResponse.json(data || []);
+}
+
+export async function POST(request: NextRequest) {
+  const supabase = await createClient();
+  const admin = createAdminClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { data: member } = await supabase
+    .from('club_members')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+    .single();
+
+  if (!member) return NextResponse.json({ error: 'No membership' }, { status: 403 });
+
+  const body = await request.json();
+  const parsed = joinWaitlistSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  const { coach_member_id, lesson_type_id, desired_date, desired_start_time, desired_end_time, player_member_id } = parsed.data;
+
+  // Calculate booking history for priority scoring
+  const { count: historyCount } = await admin
+    .from('bookings')
+    .select('id', { count: 'exact', head: true })
+    .eq('coach_member_id', coach_member_id)
+    .in('status', ['confirmed', 'completed']);
+
+  const bookingHistoryCount = historyCount || 0;
+
+  // Initial priority score (will be recalculated during cascade)
+  const priorityScore = Math.min(100, bookingHistoryCount * 10) * 0.3;
+
+  const { data: entry, error } = await admin
+    .from('waitlist_entries')
+    .insert({
+      club_id: member.club_id,
+      coach_member_id,
+      lesson_type_id,
+      desired_date,
+      desired_start_time: desired_start_time || null,
+      desired_end_time: desired_end_time || null,
+      player_member_id,
+      booked_by_member_id: member.id !== player_member_id ? member.id : null,
+      booking_history_count: bookingHistoryCount,
+      priority_score: priorityScore,
+    })
+    .select()
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json(entry, { status: 201 });
+}
