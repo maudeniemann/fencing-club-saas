@@ -51,7 +51,6 @@ const roleBadgeColors: Record<UserRole, string> = {
   admin: 'bg-purple-100 text-purple-800 border-purple-200',
   coach: 'bg-blue-100 text-blue-800 border-blue-200',
   player: 'bg-green-100 text-green-800 border-green-200',
-  parent: 'bg-orange-100 text-orange-800 border-orange-200',
 };
 
 export default function MembersPage() {
@@ -321,7 +320,6 @@ export default function MembersPage() {
               <SelectItem value="admin">Admin</SelectItem>
               <SelectItem value="coach">Coach</SelectItem>
               <SelectItem value="player">Player</SelectItem>
-              <SelectItem value="parent">Parent</SelectItem>
             </SelectContent>
           </Select>
         </div>

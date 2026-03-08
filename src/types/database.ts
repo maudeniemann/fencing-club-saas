@@ -1,7 +1,7 @@
 // Manually defined types matching our schema.
 // Replace with `npx supabase gen types` output once Supabase project is connected.
 
-export type UserRole = 'admin' | 'coach' | 'player' | 'parent';
+export type UserRole = 'admin' | 'coach' | 'player';
 export type LessonCategory = 'private' | 'group' | 'clinic';
 export type BookingStatus = 'confirmed' | 'completed' | 'cancelled' | 'no_show' | 'disputed';
 export type PaymentType = 'lesson' | 'cancellation_fee' | 'no_show_fee' | 'refund';
@@ -66,19 +66,10 @@ export interface ClubMember {
   google_calendar_channel_expiry: string | null;
   stripe_customer_id: string | null;
   stripe_default_payment_method_id: string | null;
+  favorite_coach_id: string | null;
+  auto_billing_enabled: boolean;
   created_at: string;
   updated_at: string;
-}
-
-export interface ParentChildLink {
-  id: string;
-  club_id: string;
-  parent_member_id: string;
-  child_member_id: string;
-  can_book: boolean;
-  can_pay: boolean;
-  can_view_progress: boolean;
-  created_at: string;
 }
 
 export interface Venue {
@@ -275,6 +266,8 @@ export interface WaitlistEntry {
   accept_deadline: string | null;
   responded_at: string | null;
   resulting_booking_id: string | null;
+  is_new_time_request: boolean;
+  request_notes: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -312,5 +305,34 @@ export interface Notification {
   channel: 'in_app' | 'email' | 'push';
   is_read: boolean;
   read_at: string | null;
+  sms_sent_at: string | null;
+  email_sent_at: string | null;
+  related_conversation_id: string | null;
   created_at: string;
+}
+
+// Messaging system interfaces
+export interface Conversation {
+  id: string;
+  club_id: string;
+  booking_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConversationParticipant {
+  id: string;
+  conversation_id: string;
+  member_id: string;
+  last_read_at: string | null;
+  created_at: string;
+}
+
+export interface Message {
+  id: string;
+  conversation_id: string;
+  sender_member_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
 }

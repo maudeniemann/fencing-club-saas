@@ -44,3 +44,6 @@ next-env.d.ts
 scripts/data/
 scripts/scrape-legacy.ts
 .env*.local
+
+# supabase CLI temp files
+supabase/.temp/

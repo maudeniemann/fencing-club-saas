@@ -10,6 +10,8 @@ const joinWaitlistSchema = z.object({
   desired_start_time: z.string().optional(),
   desired_end_time: z.string().optional(),
   player_member_id: z.string().uuid(),
+  is_new_time_request: z.boolean().optional().default(false),
+  request_notes: z.string().optional(),
 });
 
 export async function GET() {
@@ -58,7 +60,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { coach_member_id, lesson_type_id, desired_date, desired_start_time, desired_end_time, player_member_id } = parsed.data;
+  const { coach_member_id, lesson_type_id, desired_date, desired_start_time, desired_end_time, player_member_id, is_new_time_request, request_notes } = parsed.data;
 
   // Calculate booking history for priority scoring
   const { count: historyCount } = await admin
@@ -85,6 +87,8 @@ export async function POST(request: NextRequest) {
       booked_by_member_id: member.id !== player_member_id ? member.id : null,
       booking_history_count: bookingHistoryCount,
       priority_score: priorityScore,
+      is_new_time_request: is_new_time_request || false,
+      request_notes: request_notes || null,
     })
     .select()
     .single();

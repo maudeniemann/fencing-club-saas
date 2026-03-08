@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useClub } from '@/providers/club-provider';
 import { createClient } from '@/lib/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Card,
   CardContent,
@@ -18,11 +18,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { toast } from 'sonner';
 
 export default function AccountPage() {
   const { currentMember, role, isLoading: clubLoading, refetch } = useClub();
   const supabase = createClient();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [displayName, setDisplayName] = useState('');
   const [phone, setPhone] = useState('');
@@ -30,6 +33,29 @@ export default function AccountPage() {
   const [specialties, setSpecialties] = useState('');
   const [saving, setSaving] = useState(false);
   const [initialized, setInitialized] = useState(false);
+
+  const toggleAutoBillingMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const response = await fetch('/api/members/auto-billing', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update auto-billing');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['club-context'] });
+      refetch();
+      toast.success('Auto-billing settings updated');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to update auto-billing');
+    },
+  });
 
   // Get user email from auth
   const { data: userEmail } = useQuery({
@@ -211,6 +237,43 @@ export default function AccountPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Auto-billing (players only) */}
+      {role === 'player' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Auto-billing</CardTitle>
+            <CardDescription>
+              Automatically charge your payment method monthly for completed lessons
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <div className="font-medium">Enable Monthly Auto-billing</div>
+                <div className="text-sm text-muted-foreground">
+                  Your card will be charged at the beginning of each month for the previous month&apos;s completed lessons
+                </div>
+              </div>
+              <Switch
+                checked={currentMember.auto_billing_enabled || false}
+                onCheckedChange={(checked) => toggleAutoBillingMutation.mutate(checked)}
+                disabled={toggleAutoBillingMutation.isPending}
+              />
+            </div>
+            {!currentMember.stripe_default_payment_method_id && (
+              <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-900 dark:text-amber-200">
+                Please set up a payment method before enabling auto-billing
+              </div>
+            )}
+            {currentMember.auto_billing_enabled && (
+              <div className="rounded-lg bg-green-50 dark:bg-green-900/20 p-3 text-sm text-green-900 dark:text-green-200">
+                Auto-billing is active. Your card will be automatically charged for completed lessons at the end of each month.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Sign out */}
       <Card>

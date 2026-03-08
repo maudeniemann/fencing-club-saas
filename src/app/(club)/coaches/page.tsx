@@ -1,14 +1,20 @@
 'use client';
 
 import { useClub } from '@/providers/club-provider';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import { Star } from 'lucide-react';
 
 export default function CoachesPage() {
-  const { club, isLoading: clubLoading } = useClub();
+  const { club, currentMember, role, isLoading: clubLoading } = useClub();
   const supabase = createClient();
+  const router = useRouter();
+  const queryClient = useQueryClient();
 
   const { data: coaches = [], isLoading: coachesLoading } = useQuery({
     queryKey: ['coaches', club?.id],
@@ -39,6 +45,26 @@ export default function CoachesPage() {
       return data || [];
     },
     enabled: !!club,
+  });
+
+  const toggleFavoriteMutation = useMutation({
+    mutationFn: async (coachId: string) => {
+      const newFavoriteId = currentMember?.favorite_coach_id === coachId ? null : coachId;
+      const response = await fetch('/api/members/favorite-coach', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coach_id: newFavoriteId }),
+      });
+      if (!response.ok) throw new Error('Failed to update favorite coach');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['club-context'] });
+      toast.success('Favorite coach updated');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to update favorite');
+    },
   });
 
   if (clubLoading || coachesLoading) {
@@ -137,6 +163,27 @@ export default function CoachesPage() {
                       No additional details available.
                     </p>
                   )}
+
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => router.push(`/coaches/${coach.id}/availability`)}
+                    >
+                      View Availability
+                    </Button>
+                    {role === 'player' && (
+                      <Button
+                        size="sm"
+                        variant={currentMember?.favorite_coach_id === coach.id ? 'default' : 'outline'}
+                        onClick={() => toggleFavoriteMutation.mutate(coach.id as string)}
+                        disabled={toggleFavoriteMutation.isPending}
+                      >
+                        <Star className={`h-4 w-4 ${currentMember?.favorite_coach_id === coach.id ? 'fill-current' : ''}`} />
+                      </Button>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             );

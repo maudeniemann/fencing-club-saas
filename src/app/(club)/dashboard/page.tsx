@@ -119,7 +119,7 @@ export default function DashboardPage() {
 
       {/* Quick actions */}
       <div className="flex flex-wrap gap-3">
-        <RoleGate allowedRoles={['player', 'parent']}>
+        <RoleGate allowedRoles={['player']}>
           <Link href="/schedule/book">
             <Button>Book a Lesson</Button>
           </Link>
@@ -151,7 +151,7 @@ export default function DashboardPage() {
           {upcomingBookings.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
               No upcoming lessons.{' '}
-              {(role === 'player' || role === 'parent') && (
+              {role === 'player' && (
                 <Link href="/schedule/book" className="text-primary underline">
                   Book one now
                 </Link>

@@ -8,7 +8,6 @@ const roles: { value: UserRole | null; label: string }[] = [
   { value: null, label: 'Admin' },
   { value: 'player', label: 'Player' },
   { value: 'coach', label: 'Coach' },
-  { value: 'parent', label: 'Parent' },
 ];
 
 export function ViewAsBar() {

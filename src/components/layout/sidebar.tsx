@@ -27,8 +27,9 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: '📊' },
   { label: 'Schedule', href: '/schedule', icon: '📅' },
   { label: 'Coaches', href: '/coaches', icon: '🤺' },
-  { label: 'Progress', href: '/progress', icon: '📈', roles: ['player', 'parent', 'coach'] },
-  { label: 'Waitlist', href: '/waitlist', icon: '⏳', roles: ['player', 'parent'] },
+  { label: 'Waitlist', href: '/waitlist', icon: '⏳', roles: ['player'] },
+  { label: 'Messages', href: '/messages', icon: '💬' },
+  { label: 'Lesson Requests', href: '/lesson-requests', icon: '📝', roles: ['coach', 'admin'] },
   { label: 'Availability', href: '/availability', icon: '🕐', roles: ['coach', 'admin'] },
   { label: 'Earnings', href: '/earnings', icon: '💰', roles: ['coach'] },
 ];
@@ -153,11 +154,6 @@ export function Sidebar() {
             <DropdownMenuItem asChild>
               <Link href="/account">Account Settings</Link>
             </DropdownMenuItem>
-            {role === 'parent' && (
-              <DropdownMenuItem asChild>
-                <Link href="/account/children">Manage Children</Link>
-              </DropdownMenuItem>
-            )}
             <DropdownMenuItem asChild>
               <Link href="/notifications">Notifications</Link>
             </DropdownMenuItem>

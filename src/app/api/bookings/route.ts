@@ -100,22 +100,12 @@ export async function POST(request: NextRequest) {
 
   if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
 
-  // Determine the payer (could be a parent booking for a child)
-  let payer = currentMember;
-  if (currentMember.role === 'parent' && player_member_id !== currentMember.id) {
-    // Verify parent-child link
-    const { data: link } = await supabase
-      .from('parent_child_links')
-      .select('*')
-      .eq('parent_member_id', currentMember.id)
-      .eq('child_member_id', player_member_id)
-      .eq('can_book', true)
-      .single();
-
-    if (!link) {
-      return NextResponse.json({ error: 'Not authorized to book for this player' }, { status: 403 });
-    }
+  // Only allow booking for self (parent role removed)
+  if (player_member_id !== currentMember.id) {
+    return NextResponse.json({ error: 'Can only book lessons for yourself' }, { status: 403 });
   }
+
+  const payer = currentMember;
 
   // Create booking
   const { data: booking, error: bookingError } = await admin

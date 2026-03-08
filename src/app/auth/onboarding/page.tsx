@@ -89,7 +89,6 @@ export default function OnboardingPage() {
                 { role: 'admin' as const, label: 'Club Admin', desc: 'I manage a fencing club and want to set it up on the platform.' },
                 { role: 'coach' as const, label: 'Coach', desc: 'I teach fencing and want to join an existing club.' },
                 { role: 'player' as const, label: 'Player', desc: 'I fence and want to book lessons at my club.' },
-                { role: 'parent' as const, label: 'Parent', desc: 'I manage lessons and payments for my child(ren).' },
               ]).map(({ role, label, desc }) => (
                 <button
                   key={role}
