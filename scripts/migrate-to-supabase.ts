@@ -454,9 +454,137 @@ async function migrateBookings(
   return { created, skipped, unmatchedStudents: [...unmatchedStudents], errors };
 }
 
+// ─── Incremental Updates ──────────────────────────────────────
+
+async function updateLessonDurations(
+  reservations: ScrapedReservation[]
+): Promise<void> {
+  const supabase = createAdminClient();
+  console.log('Updating lesson type durations from actual booking data...');
+
+  // Group reservations by lesson_type and calculate actual durations
+  const durationsByType = new Map<string, number[]>();
+  for (const res of reservations) {
+    const dur = diffMinutes(res.start_time, res.end_time);
+    if (dur > 0 && dur < 480) { // Sanity check: 0 < duration < 8 hours
+      if (!durationsByType.has(res.lesson_type)) {
+        durationsByType.set(res.lesson_type, []);
+      }
+      durationsByType.get(res.lesson_type)!.push(dur);
+    }
+  }
+
+  // Update each lesson type with median duration
+  const { data: lessonTypes } = await supabase
+    .from('lesson_types')
+    .select('id, name, duration_minutes')
+    .eq('club_id', CLUB_ID);
+
+  if (!lessonTypes) return;
+
+  for (const lt of lessonTypes) {
+    const durations = durationsByType.get(lt.name);
+    if (!durations || durations.length === 0) continue;
+
+    // Calculate median
+    const sorted = durations.sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+
+    if (median !== lt.duration_minutes) {
+      const { error } = await supabase
+        .from('lesson_types')
+        .update({ duration_minutes: median })
+        .eq('id', lt.id);
+
+      if (error) {
+        console.error(`  Failed to update ${lt.name}: ${error.message}`);
+      } else {
+        console.log(`  ${lt.name}: ${lt.duration_minutes}min → ${median}min (from ${durations.length} bookings)`);
+      }
+    } else {
+      console.log(`  ${lt.name}: already correct at ${median}min`);
+    }
+  }
+}
+
+async function updatePricing(
+  reservations: ScrapedReservation[]
+): Promise<void> {
+  const supabase = createAdminClient();
+  console.log('Checking for pricing data from popover details...');
+
+  // Collect prices by lesson type
+  const pricesByType = new Map<string, number[]>();
+  for (const res of reservations) {
+    if (!res.price) continue;
+    const priceMatch = res.price.match(/\$?\s*([\d,]+(?:\.\d{2})?)/);
+    if (!priceMatch) continue;
+    const priceCents = Math.round(parseFloat(priceMatch[1].replace(',', '')) * 100);
+    if (priceCents > 0 && priceCents < 100000) { // Sanity: $0-$1000
+      if (!pricesByType.has(res.lesson_type)) {
+        pricesByType.set(res.lesson_type, []);
+      }
+      pricesByType.get(res.lesson_type)!.push(priceCents);
+    }
+  }
+
+  if (pricesByType.size === 0) {
+    console.log('  No pricing data found in scraped reservations.');
+    console.log('  Prices will need to be set manually in the admin panel.');
+    return;
+  }
+
+  // Update lesson types with median prices
+  const { data: lessonTypes } = await supabase
+    .from('lesson_types')
+    .select('id, name, price_cents')
+    .eq('club_id', CLUB_ID);
+
+  if (!lessonTypes) return;
+
+  for (const lt of lessonTypes) {
+    const prices = pricesByType.get(lt.name);
+    if (!prices || prices.length === 0) continue;
+
+    const sorted = prices.sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+
+    if (median !== lt.price_cents && median > 0) {
+      const { error } = await supabase
+        .from('lesson_types')
+        .update({ price_cents: median })
+        .eq('id', lt.id);
+
+      if (error) {
+        console.error(`  Failed to update ${lt.name} price: ${error.message}`);
+      } else {
+        console.log(`  ${lt.name}: $0 → $${(median / 100).toFixed(2)} (from ${prices.length} bookings)`);
+      }
+    }
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────
 
 async function main() {
+  const isIncremental = process.argv.includes('--incremental');
+
+  if (isIncremental) {
+    console.log('=== INCREMENTAL MIGRATION UPDATE ===\n');
+    console.log('Loading scraped data...');
+    const reservations = readJSON<ScrapedReservation[]>('reservations.json');
+    console.log(`  Reservations: ${reservations.length}`);
+
+    console.log('\nStep 1: Updating lesson durations...');
+    await updateLessonDurations(reservations);
+
+    console.log('\nStep 2: Updating pricing...');
+    await updatePricing(reservations);
+
+    console.log('\n=== INCREMENTAL UPDATE COMPLETE ===');
+    return;
+  }
+
   console.log('=== LEGACY DATA MIGRATION ===\n');
 
   // Load scraped data
