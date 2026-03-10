@@ -25,17 +25,6 @@ export default function CoachesPage() {
     enabled: !!club,
   });
 
-  const { data: lessonTypes = [] } = useQuery({
-    queryKey: ['lesson-types', club?.id],
-    queryFn: async () => {
-      if (!club) return [];
-      const response = await fetch('/api/lesson-types');
-      if (!response.ok) throw new Error('Failed to fetch lesson types');
-      return response.json();
-    },
-    enabled: !!club,
-  });
-
   const toggleFavoriteMutation = useMutation({
     mutationFn: async (coachId: string) => {
       const newFavoriteId = currentMember?.favorite_coach_id === coachId ? null : coachId;
@@ -72,27 +61,6 @@ export default function CoachesPage() {
           Meet our coaching staff
         </p>
       </div>
-
-      {/* Available lesson types */}
-      {(() => {
-        const visibleLessonTypes = role === 'player'
-          ? lessonTypes.filter((lt: Record<string, unknown>) => lt.category === 'private')
-          : lessonTypes;
-        return visibleLessonTypes.length > 0 ? (
-          <div>
-            <h2 className="text-sm font-medium text-muted-foreground mb-2">
-              Available lesson types
-            </h2>
-            <div className="flex flex-wrap gap-2">
-              {visibleLessonTypes.map((lt: Record<string, unknown>) => (
-                <Badge key={lt.id as string} variant="secondary">
-                  {lt.name as string}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        ) : null;
-      })()}
 
       {coaches.length === 0 ? (
         <Card>
