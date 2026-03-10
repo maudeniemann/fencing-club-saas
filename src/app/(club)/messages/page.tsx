@@ -64,7 +64,7 @@ export default function MessagesPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-12rem)]">
         {/* Conversations List */}
-        <Card className="lg:col-span-1 flex flex-col">
+        <Card className={`${selectedConversationId ? 'hidden lg:flex' : 'flex'} lg:col-span-1 flex-col`}>
           <CardHeader>
             <CardTitle className="text-base">Conversations</CardTitle>
           </CardHeader>
@@ -133,7 +133,7 @@ export default function MessagesPage() {
         </Card>
 
         {/* Conversation View */}
-        <Card className="lg:col-span-2 flex flex-col">
+        <Card className={`${selectedConversationId ? 'flex' : 'hidden lg:flex'} lg:col-span-2 flex-col`}>
           {selectedConversation ? (
             <ConversationView
               conversationId={selectedConversation.id}

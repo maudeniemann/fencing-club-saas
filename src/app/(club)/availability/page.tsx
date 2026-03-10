@@ -300,7 +300,7 @@ export default function AvailabilityPage() {
                     id="is_blocked"
                     checked={isBlocked}
                     onChange={(e) => setIsBlocked(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300"
+                    className="h-5 w-5 rounded border-gray-300"
                   />
                   <Label htmlFor="is_blocked">
                     Block this time (vacation / unavailable)
@@ -343,7 +343,7 @@ export default function AvailabilityPage() {
                 {slots.map((slot) => (
                   <div
                     key={slot.id}
-                    className="flex items-center justify-between rounded-lg border p-4"
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border p-4"
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">

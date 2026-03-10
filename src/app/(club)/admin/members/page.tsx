@@ -166,9 +166,9 @@ export default function MembersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Members</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Members</h1>
           <p className="text-muted-foreground">
             Manage your club members and invitations.
           </p>
@@ -281,7 +281,7 @@ export default function MembersPage() {
         <CardContent>
           <div className="space-y-2">
             <Label>Invite Code (Club Slug)</Label>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
               <Input
                 value={club?.slug ?? ''}
                 readOnly
@@ -341,10 +341,10 @@ export default function MembersPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Phone</TableHead>
+                  <TableHead className="hidden sm:table-cell">Phone</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Joined</TableHead>
+                  <TableHead className="hidden sm:table-cell">Joined</TableHead>
                   <TableHead className="w-[60px]" />
                 </TableRow>
               </TableHeader>
@@ -354,7 +354,7 @@ export default function MembersPage() {
                     <TableCell className="font-medium">
                       {member.display_name ?? 'Unnamed'}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className="hidden sm:table-cell text-muted-foreground">
                       {member.phone ?? '-'}
                     </TableCell>
                     <TableCell>
@@ -372,7 +372,7 @@ export default function MembersPage() {
                         {member.is_active ? 'Active' : 'Inactive'}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className="hidden sm:table-cell text-muted-foreground">
                       {format(new Date(member.created_at), 'MMM d, yyyy')}
                     </TableCell>
                     <TableCell>

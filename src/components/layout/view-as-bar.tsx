@@ -30,10 +30,10 @@ export function ViewAsBar() {
           {isSimulating ? (
             <>
               <span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-2 animate-pulse" />
-              Simulating: <span className="font-semibold capitalize">{simulatedRole}</span> View
+              <span className="hidden sm:inline">Simulating: </span><span className="font-semibold capitalize">{simulatedRole}</span><span className="hidden sm:inline"> View</span>
             </>
           ) : (
-            'View as:'
+            <span className="hidden sm:inline">View as:</span>
           )}
         </span>
         <div className="flex items-center gap-1">
@@ -44,7 +44,7 @@ export function ViewAsBar() {
                 key={label}
                 size="sm"
                 variant={isActive ? 'default' : 'ghost'}
-                className={`h-7 px-3 text-xs font-medium ${
+                className={`h-7 px-2 sm:px-3 text-xs font-medium ${
                   isActive ? '' : 'text-muted-foreground hover:text-foreground'
                 }`}
                 onClick={() => setSimulatedRole(value)}

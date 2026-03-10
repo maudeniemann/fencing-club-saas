@@ -91,7 +91,7 @@ export default function RevenuePage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Revenue</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Revenue</h1>
           <p className="text-muted-foreground">
             View your club revenue analytics.
           </p>
@@ -108,14 +108,14 @@ export default function RevenuePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Revenue</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Revenue</h1>
         <p className="text-muted-foreground">
           View your club revenue analytics and monthly breakdown.
         </p>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Total Revenue</CardDescription>

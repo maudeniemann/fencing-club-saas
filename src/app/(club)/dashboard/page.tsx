@@ -74,7 +74,7 @@ export default function DashboardPage() {
 
       {/* Admin stats */}
       <RoleGate allowedRoles={['admin']}>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>Total Members</CardDescription>

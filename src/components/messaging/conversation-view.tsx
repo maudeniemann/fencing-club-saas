@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
 import { useClub } from '@/providers/club-provider';
-import { X } from 'lucide-react';
+import { ChevronLeft, X } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -150,6 +150,12 @@ export function ConversationView({
       <CardHeader className="border-b">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
+            {onClose && (
+              <Button variant="ghost" size="sm" onClick={onClose} className="lg:hidden -ml-2">
+                <ChevronLeft className="h-4 w-4" />
+                Back
+              </Button>
+            )}
             <Avatar>
               <AvatarImage src={otherMember.avatar_url || undefined} />
               <AvatarFallback>{initials}</AvatarFallback>
@@ -160,7 +166,7 @@ export function ConversationView({
             </div>
           </div>
           {onClose && (
-            <Button variant="ghost" size="icon" onClick={onClose}>
+            <Button variant="ghost" size="icon" onClick={onClose} className="hidden lg:inline-flex">
               <X className="h-4 w-4" />
             </Button>
           )}

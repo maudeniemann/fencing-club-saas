@@ -96,11 +96,11 @@ export default function EarningsPage() {
           </div>
         ) : (
           <>
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               <Card>
                 <CardHeader className="pb-2">
                   <CardDescription>Total Earned</CardDescription>
-                  <CardTitle className="text-3xl">
+                  <CardTitle className="text-2xl sm:text-3xl">
                     ${(totalRevenueCents / 100).toFixed(2)}
                   </CardTitle>
                 </CardHeader>
@@ -108,13 +108,13 @@ export default function EarningsPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardDescription>Lessons This Month</CardDescription>
-                  <CardTitle className="text-3xl">{lessonsThisMonth}</CardTitle>
+                  <CardTitle className="text-2xl sm:text-3xl">{lessonsThisMonth}</CardTitle>
                 </CardHeader>
               </Card>
               <Card>
                 <CardHeader className="pb-2">
                   <CardDescription>Avg Per Lesson</CardDescription>
-                  <CardTitle className="text-3xl">
+                  <CardTitle className="text-2xl sm:text-3xl">
                     ${(avgPerLesson / 100).toFixed(2)}
                   </CardTitle>
                 </CardHeader>
@@ -122,7 +122,7 @@ export default function EarningsPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardDescription>Fill Rate</CardDescription>
-                  <CardTitle className="text-3xl">
+                  <CardTitle className="text-2xl sm:text-3xl">
                     {(fillRate * 100).toFixed(0)}%
                   </CardTitle>
                 </CardHeader>
@@ -139,7 +139,7 @@ export default function EarningsPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid gap-4 md:grid-cols-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <div className="text-sm text-muted-foreground">This Month (Projected)</div>
                       <div className="text-xl font-semibold">

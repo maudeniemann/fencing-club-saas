@@ -129,7 +129,7 @@ export default function PayoutsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Coach Payouts</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Coach Payouts</h1>
         <p className="text-muted-foreground">
           Calculate and manage coach commission payouts.
         </p>
@@ -277,17 +277,17 @@ export default function PayoutsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Period</TableHead>
+                    <TableHead className="hidden sm:table-cell">Period</TableHead>
                     <TableHead>Coach</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Paid Date</TableHead>
+                    <TableHead className="hidden sm:table-cell">Paid Date</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {payouts.map((payout) => (
                     <TableRow key={payout.id}>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         {format(new Date(payout.period_start), 'MMM d')} -{' '}
                         {format(new Date(payout.period_end), 'MMM d, yyyy')}
                       </TableCell>
@@ -305,7 +305,7 @@ export default function PayoutsPage() {
                           {payout.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="hidden sm:table-cell text-muted-foreground">
                         {payout.paid_at
                           ? format(new Date(payout.paid_at), 'MMM d, yyyy')
                           : '-'}

@@ -55,6 +55,10 @@ export default function CoachAvailabilityPage({
 }) {
   const { id: coachId } = use(params);
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
+  const [selectedDayIndex, setSelectedDayIndex] = useState(() => {
+    const today = new Date().getDay(); // 0=Sun
+    return today; // daysInWeek starts on Sunday (weekStartsOn: 0)
+  });
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const weekStart = startOfWeek(addWeeks(new Date(), currentWeekOffset), {
@@ -257,26 +261,68 @@ export default function CoachAvailabilityPage({
         </div>
       </div>
 
+      {/* Mobile Day Picker */}
+      <div className="md:hidden flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0"
+          onClick={() => setSelectedDayIndex((prev) => Math.max(0, prev - 1))}
+          disabled={selectedDayIndex === 0}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <div className="flex flex-1 gap-1">
+          {daysInWeek.map((day, idx) => {
+            const today = isToday(day);
+            return (
+              <button
+                key={idx}
+                onClick={() => setSelectedDayIndex(idx)}
+                className={cn(
+                  'flex-1 flex flex-col items-center py-1 rounded-md text-xs transition-colors',
+                  idx === selectedDayIndex
+                    ? 'bg-primary text-primary-foreground'
+                    : today
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:bg-muted'
+                )}
+              >
+                <span className="font-medium">{format(day, 'EEE')}</span>
+                <span className="text-[11px]">{format(day, 'd')}</span>
+              </button>
+            );
+          })}
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0"
+          onClick={() => setSelectedDayIndex((prev) => Math.min(daysInWeek.length - 1, prev + 1))}
+          disabled={selectedDayIndex === daysInWeek.length - 1}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+
       {/* Time Grid */}
       <div
         ref={scrollRef}
         className="relative overflow-auto rounded-lg border border-border bg-background"
         style={{ maxHeight: 'calc(100vh - 260px)' }}
       >
-        <div className="flex min-w-[700px]">
-          {/* Time gutter */}
+        {/* Mobile: single day column */}
+        <div className="flex md:hidden">
           <TimeGutter />
-
-          {/* Day columns */}
-          {daysInWeek.map((day) => {
+          {(() => {
+            const day = daysInWeek[selectedDayIndex];
             const dateStr = format(day, 'yyyy-MM-dd');
             const slots = slotsByDay.get(dateStr) || [];
             const today = isToday(day);
             const isPast = isBefore(day, startOfDay(new Date()));
 
             return (
-              <div key={dateStr} className={cn('flex-1 min-w-0', isPast && 'opacity-50')}>
-                {/* Day header */}
+              <div className={cn('flex-1 min-w-0', isPast && 'opacity-50')}>
                 <div
                   className={cn(
                     'sticky top-0 z-20 flex flex-col items-center py-1.5 border-b border-r border-border/50 bg-background/95 backdrop-blur-sm',
@@ -298,12 +344,10 @@ export default function CoachAvailabilityPage({
                   </span>
                 </div>
 
-                {/* Time grid body */}
                 <div
                   className="relative border-r border-border/50"
                   style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}
                 >
-                  {/* Hour grid lines */}
                   {Array.from({ length: TOTAL_HOURS }, (_, i) => (
                     <div
                       key={i}
@@ -311,11 +355,89 @@ export default function CoachAvailabilityPage({
                       style={{ top: i * HOUR_HEIGHT }}
                     />
                   ))}
-
-                  {/* Current time indicator */}
                   {today && <CurrentTimeIndicator />}
+                  {slots.map((slot) => {
+                    const top = timeToPixels(slot.startTime);
+                    const height = Math.max(
+                      timeToPixels(slot.endTime) - top,
+                      20
+                    );
+                    const timeLabel = `${format(slot.startTime, 'h:mm a')} – ${format(slot.endTime, 'h:mm a')}`;
 
-                  {/* Availability slot blocks */}
+                    return (
+                      <div
+                        key={slot.id}
+                        className={cn(
+                          'absolute left-1 right-1 rounded-md border-l-[3px] px-1.5 py-1 overflow-hidden text-[11px] leading-tight transition-colors',
+                          slot.isBooked
+                            ? 'bg-muted border-l-muted-foreground/30 text-muted-foreground'
+                            : 'bg-emerald-50 border-l-emerald-500 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200'
+                        )}
+                        style={{
+                          top,
+                          height,
+                          position: 'absolute',
+                        }}
+                      >
+                        <div className="font-medium truncate">{timeLabel}</div>
+                        {slot.isBooked && (
+                          <div className="text-[10px] opacity-70 line-through">
+                            Booked
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* Desktop: all 7 day columns */}
+        <div className="hidden md:flex min-w-[700px]">
+          <TimeGutter />
+          {daysInWeek.map((day) => {
+            const dateStr = format(day, 'yyyy-MM-dd');
+            const slots = slotsByDay.get(dateStr) || [];
+            const today = isToday(day);
+            const isPast = isBefore(day, startOfDay(new Date()));
+
+            return (
+              <div key={dateStr} className={cn('flex-1 min-w-0', isPast && 'opacity-50')}>
+                <div
+                  className={cn(
+                    'sticky top-0 z-20 flex flex-col items-center py-1.5 border-b border-r border-border/50 bg-background/95 backdrop-blur-sm',
+                    today && 'bg-primary/5'
+                  )}
+                >
+                  <span className="text-[11px] font-medium text-muted-foreground uppercase">
+                    {format(day, 'EEE')}
+                  </span>
+                  <span
+                    className={cn(
+                      'flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold',
+                      today
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-foreground'
+                    )}
+                  >
+                    {format(day, 'd')}
+                  </span>
+                </div>
+
+                <div
+                  className="relative border-r border-border/50"
+                  style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}
+                >
+                  {Array.from({ length: TOTAL_HOURS }, (_, i) => (
+                    <div
+                      key={i}
+                      className="absolute left-0 right-0 border-t border-border/30"
+                      style={{ top: i * HOUR_HEIGHT }}
+                    />
+                  ))}
+                  {today && <CurrentTimeIndicator />}
                   {slots.map((slot) => {
                     const top = timeToPixels(slot.startTime);
                     const height = Math.max(

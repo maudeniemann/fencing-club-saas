@@ -76,7 +76,7 @@ export default function VenuesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Venues</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Venues</h1>
         <p className="text-muted-foreground">
           Manage your club venues.
         </p>
@@ -91,7 +91,7 @@ export default function VenuesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleAddVenue} className="flex items-end gap-4">
+          <form onSubmit={handleAddVenue} className="flex flex-col sm:flex-row sm:items-end gap-4">
             <div className="space-y-2 flex-1">
               <Label htmlFor="venue-name">Venue Name</Label>
               <Input
@@ -113,6 +113,7 @@ export default function VenuesPage() {
             <Button
               type="submit"
               disabled={!newVenueName.trim() || addVenueMutation.isPending}
+              className="w-full sm:w-auto"
             >
               {addVenueMutation.isPending ? 'Adding...' : 'Add Venue'}
             </Button>

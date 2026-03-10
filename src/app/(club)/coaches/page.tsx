@@ -84,7 +84,7 @@ export default function CoachesPage() {
 
             return (
               <Card key={coach.id as string} className="flex flex-col">
-                <CardHeader className="flex-row items-center gap-4">
+                <CardHeader className="flex-row items-center gap-3">
                   {coach.avatar_url ? (
                     <img
                       src={coach.avatar_url as string}
