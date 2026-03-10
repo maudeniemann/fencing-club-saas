@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDemoSafeClient } from '@/lib/supabase/demo-client';
+import { getAuthenticatedMember } from '@/lib/auth/get-authenticated-member';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { client: supabase, member } = await getDemoSafeClient();
-
-  if (!member) {
-    return NextResponse.json({ error: 'No membership' }, { status: 403 });
-  }
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member, client } = auth;
 
   const { id: coachId } = await params;
 
-  const { data: coach, error } = await supabase
+  const { data: coach, error } = await client
     .from('club_members')
     .select('id, display_name, bio, specialties, avatar_url')
     .eq('id', coachId)

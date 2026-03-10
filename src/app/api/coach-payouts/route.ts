@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { getDemoSafeClient } from '@/lib/supabase/demo-client';
+import { getAuthenticatedMember } from '@/lib/auth/get-authenticated-member';
 import { z } from 'zod';
 
 const createPayoutSchema = z.object({
@@ -13,13 +11,11 @@ const createPayoutSchema = z.object({
 });
 
 export async function GET() {
-  const { client: supabase, member } = await getDemoSafeClient();
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member, client } = auth;
 
-  if (!member) {
-    return NextResponse.json([]);
-  }
-
-  const { data } = await supabase
+  const { data } = await client
     .from('coach_payouts')
     .select('*, coach:club_members!coach_payouts_coach_member_id_fkey(display_name)')
     .eq('club_id', member.club_id)
@@ -29,19 +25,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const admin = createAdminClient();
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { user, member, client } = auth;
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: member } = await supabase
-    .from('club_members')
-    .select('id, club_id, role')
-    .eq('user_id', user.id)
-    .single();
-
-  if (!member || member.role !== 'admin') {
+  if (member.role !== 'admin') {
     return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
   }
 
@@ -50,13 +38,13 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   // Get coach commission rate
-  const { data: coach } = await admin
+  const { data: coach } = await client
     .from('club_members')
     .select('commission_rate')
     .eq('id', parsed.data.coach_member_id)
     .single();
 
-  const { data: club } = await admin
+  const { data: club } = await client
     .from('clubs')
     .select('default_commission_split')
     .eq('id', member.club_id)
@@ -65,7 +53,7 @@ export async function POST(request: NextRequest) {
   const commissionRate = coach?.commission_rate || club?.default_commission_split || 70;
 
   // Calculate total lesson revenue for the period
-  const { data: bookings } = await admin
+  const { data: bookings } = await client
     .from('bookings')
     .select('id')
     .eq('coach_member_id', parsed.data.coach_member_id)
@@ -78,7 +66,7 @@ export async function POST(request: NextRequest) {
 
   let totalRevenue = 0;
   if (bookingIds.length > 0) {
-    const { data: payments } = await admin
+    const { data: payments } = await client
       .from('payments')
       .select('club_amount_cents')
       .in('booking_id', bookingIds)
@@ -91,7 +79,7 @@ export async function POST(request: NextRequest) {
   const coachPayoutCents = Math.round(totalRevenue * commissionRate / 100);
   const clubRetainedCents = totalRevenue - coachPayoutCents;
 
-  const { data: payout, error } = await admin
+  const { data: payout, error } = await client
     .from('coach_payouts')
     .insert({
       club_id: member.club_id,

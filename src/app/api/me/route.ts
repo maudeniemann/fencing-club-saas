@@ -1,29 +1,33 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
-// TEMP: Force demo mode — always return Dynamo Fencing context
 export async function GET() {
-  const admin = createAdminClient();
-  const DEMO_CLUB_ID = 'da1f8770-aabf-49a2-986c-1e4fb45d2651';
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  const { data: adminMember } = await admin
+  if (!user) {
+    return NextResponse.json({ member: null, club: null });
+  }
+
+  const admin = createAdminClient();
+  const { data: member } = await admin
     .from('club_members')
     .select('*')
-    .eq('club_id', DEMO_CLUB_ID)
-    .eq('role', 'admin')
+    .eq('user_id', user.id)
     .eq('is_active', true)
     .limit(1)
     .single();
 
-  if (!adminMember) {
+  if (!member) {
     return NextResponse.json({ member: null, club: null });
   }
 
   const { data: club } = await admin
     .from('clubs')
     .select('*')
-    .eq('id', adminMember.club_id)
+    .eq('id', member.club_id)
     .single();
 
-  return NextResponse.json({ member: adminMember, club });
+  return NextResponse.json({ member, club });
 }

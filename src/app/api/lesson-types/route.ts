@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { getDemoSafeClient } from '@/lib/supabase/demo-client';
+import { getAuthenticatedMember } from '@/lib/auth/get-authenticated-member';
 import { z } from 'zod';
 
 const createLessonTypeSchema = z.object({
@@ -15,13 +14,11 @@ const createLessonTypeSchema = z.object({
 });
 
 export async function GET() {
-  const { client: supabase, member } = await getDemoSafeClient();
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member, client } = auth;
 
-  if (!member) {
-    return NextResponse.json([]);
-  }
-
-  const { data } = await supabase
+  const { data } = await client
     .from('lesson_types')
     .select('*')
     .eq('club_id', member.club_id)
@@ -31,17 +28,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member, client } = auth;
 
-  const { data: member } = await supabase
-    .from('club_members')
-    .select('id, club_id, role')
-    .eq('user_id', user.id)
-    .single();
-
-  if (!member || member.role !== 'admin') {
+  if (member.role !== 'admin') {
     return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
   }
 
@@ -49,7 +40,7 @@ export async function POST(request: NextRequest) {
   const parsed = createLessonTypeSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('lesson_types')
     .insert({ club_id: member.club_id, ...parsed.data })
     .select()

@@ -4,6 +4,7 @@ import {
   isAfter,
   isBefore,
   parse,
+  addMinutes,
   eachDayOfInterval,
 } from 'date-fns';
 import type { AvailabilitySlot, Booking, ComputedSlot } from '@/types';
@@ -15,6 +16,8 @@ interface GetAvailableSlotsParams {
   coachMemberId: string;
   dateFrom: Date;
   dateTo: Date;
+  /** When true, subdivide each availability window into 30-min chunks. Default: false */
+  subdivide?: boolean;
 }
 
 /**
@@ -23,6 +26,9 @@ interface GetAvailableSlotsParams {
  * 2. One-off availability slots
  * 3. Blocked dates
  * 4. Existing confirmed bookings (to exclude booked times)
+ *
+ * When `subdivide` is true, each slot is broken into 30-minute chunks
+ * with independent booking status per chunk.
  */
 export async function getAvailableSlots({
   supabase,
@@ -30,6 +36,7 @@ export async function getAvailableSlots({
   coachMemberId,
   dateFrom,
   dateTo,
+  subdivide = false,
 }: GetAvailableSlotsParams): Promise<ComputedSlot[]> {
   // Fetch all availability slots for this coach
   const { data: slots } = await supabase
@@ -85,27 +92,59 @@ export async function getAvailableSlots({
     });
 
     for (const slot of daySlots) {
-      // Check if this slot overlaps with any existing booking
       const slotStart = parse(`${dateStr} ${slot.start_time}`, 'yyyy-MM-dd HH:mm:ss', new Date());
       const slotEnd = parse(`${dateStr} ${slot.end_time}`, 'yyyy-MM-dd HH:mm:ss', new Date());
 
-      const isBooked = existingBookings.some((booking) => {
-        const bookingStart = new Date(booking.starts_at);
-        const bookingEnd = new Date(booking.ends_at);
-        // Overlap check: slot starts before booking ends AND slot ends after booking starts
-        return isBefore(slotStart, bookingEnd) && isAfter(slotEnd, bookingStart);
-      });
+      if (subdivide) {
+        // Break into 30-minute chunks
+        let chunkStart = slotStart;
+        while (isBefore(chunkStart, slotEnd)) {
+          const chunkEnd = addMinutes(chunkStart, 30);
+          // Don't create a chunk that goes beyond the slot end
+          if (isAfter(chunkEnd, slotEnd)) break;
 
-      computedSlots.push({
-        date: dateStr,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        coach_member_id: coachMemberId,
-        venue_id: slot.venue_id,
-        strip_id: slot.strip_id,
-        is_booked: isBooked,
-        allowed_lesson_type_ids: slot.allowed_lesson_type_ids,
-      });
+          const chunkIsBooked = existingBookings.some((booking) => {
+            const bookingStart = new Date(booking.starts_at);
+            const bookingEnd = new Date(booking.ends_at);
+            return isBefore(chunkStart, bookingEnd) && isAfter(chunkEnd, bookingStart);
+          });
+
+          // Skip past slots (only include today's remaining slots and future)
+          const now = new Date();
+          if (!isBefore(chunkStart, now)) {
+            computedSlots.push({
+              date: dateStr,
+              start_time: format(chunkStart, 'HH:mm:ss'),
+              end_time: format(chunkEnd, 'HH:mm:ss'),
+              coach_member_id: coachMemberId,
+              venue_id: slot.venue_id,
+              strip_id: slot.strip_id,
+              is_booked: chunkIsBooked,
+              allowed_lesson_type_ids: slot.allowed_lesson_type_ids,
+            });
+          }
+
+          chunkStart = chunkEnd;
+        }
+      } else {
+        // Original behavior: return the full window
+        const isBooked = existingBookings.some((booking) => {
+          const bookingStart = new Date(booking.starts_at);
+          const bookingEnd = new Date(booking.ends_at);
+          return isBefore(slotStart, bookingEnd) && isAfter(slotEnd, bookingStart);
+        });
+
+        computedSlots.push({
+          date: dateStr,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+          coach_member_id: coachMemberId,
+          venue_id: slot.venue_id,
+          strip_id: slot.strip_id,
+          is_booked: isBooked,
+          allowed_lesson_type_ids: slot.allowed_lesson_type_ids,
+        });
+      }
     }
   }
 

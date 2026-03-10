@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { getDemoSafeClient } from '@/lib/supabase/demo-client';
+import { getAuthenticatedMember } from '@/lib/auth/get-authenticated-member';
 import { z } from 'zod';
 
 const joinWaitlistSchema = z.object({
@@ -16,27 +14,14 @@ const joinWaitlistSchema = z.object({
 });
 
 export async function GET() {
-  const { client: supabase, user, member: currentMember } = await getDemoSafeClient();
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member, client } = auth;
 
-  if (!currentMember) {
-    return NextResponse.json([]);
-  }
-
-  if (!user) {
-    // Demo mode: return waitlist entries for the demo club
-    const { data } = await supabase
-      .from('waitlist_entries')
-      .select('*, coach:club_members!waitlist_entries_coach_member_id_fkey(display_name), lesson_types(name)')
-      .eq('club_id', currentMember.club_id)
-      .in('status', ['waiting', 'notified'])
-      .order('created_at', { ascending: false });
-    return NextResponse.json(data || []);
-  }
-
-  const { data } = await supabase
+  const { data } = await client
     .from('waitlist_entries')
     .select('*, coach:club_members!waitlist_entries_coach_member_id_fkey(display_name), lesson_types(name)')
-    .or(`player_member_id.eq.${currentMember.id},booked_by_member_id.eq.${currentMember.id}`)
+    .or(`player_member_id.eq.${member.id},booked_by_member_id.eq.${member.id}`)
     .in('status', ['waiting', 'notified'])
     .order('created_at', { ascending: false });
 
@@ -44,20 +29,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const admin = createAdminClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: member } = await supabase
-    .from('club_members')
-    .select('*')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!member) return NextResponse.json({ error: 'No membership' }, { status: 403 });
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member, client } = auth;
 
   const body = await request.json();
   const parsed = joinWaitlistSchema.safeParse(body);
@@ -68,7 +42,7 @@ export async function POST(request: NextRequest) {
   const { coach_member_id, lesson_type_id, desired_date, desired_start_time, desired_end_time, player_member_id, is_new_time_request, request_notes } = parsed.data;
 
   // Calculate booking history for priority scoring
-  const { count: historyCount } = await admin
+  const { count: historyCount } = await client
     .from('bookings')
     .select('id', { count: 'exact', head: true })
     .eq('coach_member_id', coach_member_id)
@@ -79,7 +53,7 @@ export async function POST(request: NextRequest) {
   // Initial priority score (will be recalculated during cascade)
   const priorityScore = Math.min(100, bookingHistoryCount * 10) * 0.3;
 
-  const { data: entry, error } = await admin
+  const { data: entry, error } = await client
     .from('waitlist_entries')
     .insert({
       club_id: member.club_id,

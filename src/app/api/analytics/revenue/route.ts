@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { getDemoSafeClient } from '@/lib/supabase/demo-client';
+import { getAuthenticatedMember } from '@/lib/auth/get-authenticated-member';
 import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 
 export async function GET(request: NextRequest) {
-  const { member } = await getDemoSafeClient();
-  const admin = createAdminClient();
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member, client: admin } = auth;
 
-  if (!member || member.role !== 'admin') {
+  if (member.role !== 'admin') {
     return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
   }
 

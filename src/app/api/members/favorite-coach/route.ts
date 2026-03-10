@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDemoSafeClient } from '@/lib/supabase/demo-client';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { getAuthenticatedMember } from '@/lib/auth/get-authenticated-member';
 import { z } from 'zod';
 
 const updateFavoriteSchema = z.object({
@@ -8,11 +7,9 @@ const updateFavoriteSchema = z.object({
 });
 
 export async function PUT(request: NextRequest) {
-  const { member } = await getDemoSafeClient();
-
-  if (!member) {
-    return NextResponse.json({ error: 'No membership' }, { status: 403 });
-  }
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member, client } = auth;
 
   const body = await request.json();
   const parsed = updateFavoriteSchema.safeParse(body);
@@ -21,11 +18,10 @@ export async function PUT(request: NextRequest) {
   }
 
   const { coach_id } = parsed.data;
-  const admin = createAdminClient();
 
   // If setting a favorite, validate it's a coach
   if (coach_id) {
-    const { data: coach } = await admin
+    const { data: coach } = await client
       .from('club_members')
       .select('id, role')
       .eq('id', coach_id)
@@ -43,7 +39,7 @@ export async function PUT(request: NextRequest) {
   }
 
   // Update favorite_coach_id
-  const { error } = await admin
+  const { error } = await client
     .from('club_members')
     .update({ favorite_coach_id: coach_id })
     .eq('id', member.id);

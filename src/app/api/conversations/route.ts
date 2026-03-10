@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { getDemoSafeClient } from '@/lib/supabase/demo-client';
+import { getAuthenticatedMember } from '@/lib/auth/get-authenticated-member';
 import { z } from 'zod';
 
 const createConversationSchema = z.object({
@@ -10,24 +8,12 @@ const createConversationSchema = z.object({
 });
 
 export async function GET() {
-  const { client: supabase, user } = await getDemoSafeClient();
-
-  if (!user) {
-    // Demo mode: no user context for conversations
-    return NextResponse.json([]);
-  }
-
-  const { data: member } = await supabase
-    .from('club_members')
-    .select('id, club_id')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!member) return NextResponse.json({ error: 'No membership' }, { status: 403 });
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member, client } = auth;
 
   // Get all conversations where user is a participant
-  const { data: participants } = await supabase
+  const { data: participants } = await client
     .from('conversation_participants')
     .select(`
       conversation_id,
@@ -47,9 +33,9 @@ export async function GET() {
   const conversationsWithDetails = await Promise.all(
     participants.map(async (p: any) => {
       const conversation = p.conversations;
-      
+
       // Get other participant
-      const { data: otherParticipant } = await supabase
+      const { data: otherParticipant } = await client
         .from('conversation_participants')
         .select('member_id, club_members(id, display_name, avatar_url, role)')
         .eq('conversation_id', conversation.id)
@@ -57,7 +43,7 @@ export async function GET() {
         .single();
 
       // Get latest message
-      const { data: latestMessage } = await supabase
+      const { data: latestMessage } = await client
         .from('messages')
         .select('content, created_at, sender_member_id')
         .eq('conversation_id', conversation.id)
@@ -66,7 +52,7 @@ export async function GET() {
         .single();
 
       // Count unread messages
-      const { count: unreadCount } = await supabase
+      const { count: unreadCount } = await client
         .from('messages')
         .select('id', { count: 'exact', head: true })
         .eq('conversation_id', conversation.id)
@@ -84,7 +70,7 @@ export async function GET() {
   );
 
   // Sort by latest activity
-  conversationsWithDetails.sort((a, b) => 
+  conversationsWithDetails.sort((a, b) =>
     new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
   );
 
@@ -92,20 +78,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const admin = createAdminClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: member } = await supabase
-    .from('club_members')
-    .select('id, club_id, role')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!member) return NextResponse.json({ error: 'No membership' }, { status: 403 });
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member, client } = auth;
 
   const body = await request.json();
   const parsed = createConversationSchema.safeParse(body);
@@ -116,7 +91,7 @@ export async function POST(request: NextRequest) {
   const { other_member_id, booking_id } = parsed.data;
 
   // Validate other member is in same club
-  const { data: otherMember } = await supabase
+  const { data: otherMember } = await client
     .from('club_members')
     .select('id, role')
     .eq('id', other_member_id)
@@ -129,7 +104,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Validate coach-athlete pairing
-  const isCoachAthletePair = 
+  const isCoachAthletePair =
     (member.role === 'coach' && otherMember.role === 'player') ||
     (member.role === 'player' && otherMember.role === 'coach');
 
@@ -140,7 +115,7 @@ export async function POST(request: NextRequest) {
   // Check if conversation already exists
   if (booking_id) {
     // Booking-specific conversation
-    const { data: existing } = await admin
+    const { data: existing } = await client
       .from('conversations')
       .select('id')
       .eq('booking_id', booking_id)
@@ -151,7 +126,7 @@ export async function POST(request: NextRequest) {
     }
   } else {
     // General DM - check if conversation exists between these two members
-    const { data: existingParticipants } = await admin
+    const { data: existingParticipants } = await client
       .from('conversation_participants')
       .select('conversation_id')
       .in('member_id', [member.id, other_member_id]);
@@ -169,7 +144,7 @@ export async function POST(request: NextRequest) {
 
       if (existingConversationId) {
         // Check it's not a booking conversation
-        const { data: existingConv } = await admin
+        const { data: existingConv } = await client
           .from('conversations')
           .select('id, booking_id')
           .eq('id', existingConversationId)
@@ -183,7 +158,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Create new conversation
-  const { data: conversation, error: convError } = await admin
+  const { data: conversation, error: convError } = await client
     .from('conversations')
     .insert({
       club_id: member.club_id,
@@ -197,7 +172,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Add participants
-  await admin.from('conversation_participants').insert([
+  await client.from('conversation_participants').insert([
     { conversation_id: conversation.id, member_id: member.id },
     { conversation_id: conversation.id, member_id: other_member_id },
   ]);

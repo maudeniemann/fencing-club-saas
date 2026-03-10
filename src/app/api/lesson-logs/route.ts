@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { getDemoSafeClient } from '@/lib/supabase/demo-client';
+import { getAuthenticatedMember } from '@/lib/auth/get-authenticated-member';
 import { z } from 'zod';
 
 const createLogSchema = z.object({
@@ -21,17 +21,15 @@ const createLogSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const { client: supabase, member } = await getDemoSafeClient();
-
-  if (!member) {
-    return NextResponse.json([]);
-  }
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member, client } = auth;
 
   const { searchParams } = new URL(request.url);
   const playerId = searchParams.get('player_id');
   const coachId = searchParams.get('coach_id');
 
-  let query = supabase
+  let query = client
     .from('lesson_logs')
     .select('*, coach:club_members!lesson_logs_coach_member_id_fkey(display_name), player:club_members!lesson_logs_player_member_id_fkey(display_name)')
     .eq('club_id', member.club_id)

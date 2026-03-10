@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { getAuthenticatedMember } from '@/lib/auth/get-authenticated-member';
 import { hasBookingConflict, hasPlayerConflict } from '@/lib/scheduling/conflict-check';
+import { isSlotAvailable } from '@/lib/scheduling/availability';
 import { createLessonPaymentIntent } from '@/lib/stripe/payments';
 import { addMinutes } from 'date-fns';
 import { z } from 'zod';
+import type { Club, ClubMember } from '@/types';
 
 const createBookingSchema = z.object({
   coach_member_id: z.string().uuid(),
@@ -18,25 +19,25 @@ const createBookingSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  // TEMP: Force demo mode — always use admin client
-  const queryClient = createAdminClient();
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member, client } = auth;
 
   const { searchParams } = new URL(request.url);
   const status = searchParams.get('status');
   const coachId = searchParams.get('coach_id');
   const startAfter = searchParams.get('start_after');
   const startBefore = searchParams.get('start_before');
-  const clubId = searchParams.get('club_id');
 
-  let query = queryClient
+  let query = client!
     .from('bookings')
     .select('*, lesson_types(name, category, duration_minutes, price_cents, color), coach:club_members!bookings_coach_member_id_fkey(display_name, avatar_url), booking_participants(*, player:club_members!booking_participants_player_member_id_fkey(display_name, id)), venue:venues(name)')
+    .eq('club_id', member!.club_id)
     .order('starts_at', { ascending: true })
     .limit(500);
 
   if (status) query = query.eq('status', status);
   if (coachId) query = query.eq('coach_member_id', coachId);
-  if (clubId) query = query.eq('club_id', clubId);
   if (startAfter) query = query.gte('starts_at', startAfter);
   if (startBefore) query = query.lte('starts_at', startBefore);
 
@@ -47,21 +48,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const admin = createAdminClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  // Get current member
-  const { data: currentMember } = await supabase
-    .from('club_members')
-    .select('*')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!currentMember) return NextResponse.json({ error: 'No club membership' }, { status: 403 });
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { user, member: currentMember, club, client: admin } = auth;
 
   // Parse and validate body
   const body = await request.json();
@@ -73,7 +62,7 @@ export async function POST(request: NextRequest) {
   const { coach_member_id, lesson_type_id, starts_at, player_member_id, venue_id, strip_id, notes } = parsed.data;
 
   // Get lesson type for duration and price
-  const { data: lessonType } = await supabase
+  const { data: lessonType } = await admin!
     .from('lesson_types')
     .select('*')
     .eq('id', lesson_type_id)
@@ -86,38 +75,37 @@ export async function POST(request: NextRequest) {
   const endsAt = endsAtDate.toISOString();
 
   // Double-booking prevention: check coach conflicts
-  const coachConflict = await hasBookingConflict(admin, coach_member_id, starts_at, endsAt);
+  const coachConflict = await hasBookingConflict(admin!, coach_member_id, starts_at, endsAt);
   if (coachConflict) {
     return NextResponse.json({ error: 'Coach is not available at this time' }, { status: 409 });
   }
 
   // Check player conflicts
-  const playerConflict = await hasPlayerConflict(admin, player_member_id, starts_at, endsAt);
+  const playerConflict = await hasPlayerConflict(admin!, player_member_id, starts_at, endsAt);
   if (playerConflict) {
     return NextResponse.json({ error: 'Player already has a booking at this time' }, { status: 409 });
   }
 
-  // Get club for Stripe info
-  const { data: club } = await supabase
-    .from('clubs')
-    .select('*')
-    .eq('id', currentMember.club_id)
-    .single();
+  // Verify the slot is actually available (no other booking in this time window)
+  const slotAvailable = await isSlotAvailable(admin!, coach_member_id, startsAtDate, endsAtDate);
+  if (!slotAvailable) {
+    return NextResponse.json({ error: 'This time slot is no longer available' }, { status: 409 });
+  }
 
   if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
 
   // Only allow booking for self (parent role removed)
-  if (player_member_id !== currentMember.id) {
+  if (player_member_id !== currentMember!.id) {
     return NextResponse.json({ error: 'Can only book lessons for yourself' }, { status: 403 });
   }
 
-  const payer = currentMember;
+  const payer = currentMember!;
 
   // Create booking
-  const { data: booking, error: bookingError } = await admin
+  const { data: booking, error: bookingError } = await admin!
     .from('bookings')
     .insert({
-      club_id: currentMember.club_id,
+      club_id: payer.club_id,
       coach_member_id,
       lesson_type_id,
       venue_id: venue_id || null,
@@ -127,7 +115,7 @@ export async function POST(request: NextRequest) {
       duration_minutes: lessonType.duration_minutes,
       status: 'confirmed',
       notes: notes || null,
-      created_by: user.id,
+      created_by: user!.id,
     })
     .select()
     .single();
@@ -142,10 +130,10 @@ export async function POST(request: NextRequest) {
   let clubAmountCents = lessonType.price_cents;
 
   try {
-    if (club.stripe_account_id && club.stripe_charges_enabled && payer.stripe_customer_id) {
+    if (club!.stripe_account_id && club!.stripe_charges_enabled && payer.stripe_customer_id) {
       const result = await createLessonPaymentIntent({
-        club,
-        payer,
+        club: club as unknown as Club,
+        payer: payer as unknown as ClubMember,
         lessonType,
         bookingId: booking.id,
         playerMemberId: player_member_id,
@@ -157,7 +145,7 @@ export async function POST(request: NextRequest) {
     }
   } catch (stripeError) {
     // Rollback booking if payment fails
-    await admin.from('bookings').delete().eq('id', booking.id);
+    await admin!.from('bookings').delete().eq('id', booking.id);
     return NextResponse.json(
       { error: stripeError instanceof Error ? stripeError.message : 'Payment failed' },
       { status: 402 }
@@ -165,10 +153,10 @@ export async function POST(request: NextRequest) {
   }
 
   // Create payment record
-  const { data: payment } = await admin
+  const { data: payment } = await admin!
     .from('payments')
     .insert({
-      club_id: currentMember.club_id,
+      club_id: payer.club_id,
       booking_id: booking.id,
       payer_member_id: payer.id,
       player_member_id,
@@ -184,19 +172,19 @@ export async function POST(request: NextRequest) {
     .single();
 
   // Create booking participant
-  await admin.from('booking_participants').insert({
-    club_id: currentMember.club_id,
+  await admin!.from('booking_participants').insert({
+    club_id: payer.club_id,
     booking_id: booking.id,
     player_member_id,
-    booked_by_member_id: currentMember.id,
+    booked_by_member_id: payer.id,
     payment_id: payment?.id || null,
     price_charged_cents: lessonType.price_cents,
     status: 'confirmed',
   });
 
   // Create notification for coach
-  await admin.from('notifications').insert({
-    club_id: currentMember.club_id,
+  await admin!.from('notifications').insert({
+    club_id: payer.club_id,
     recipient_member_id: coach_member_id,
     type: 'booking_confirmed',
     title: 'New Lesson Booked',

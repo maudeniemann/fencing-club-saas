@@ -1,19 +1,15 @@
 import { NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { getDemoSafeClient } from '@/lib/supabase/demo-client';
+import { getAuthenticatedMember } from '@/lib/auth/get-authenticated-member';
 import { generateEarningsForecast } from '@/lib/analytics/earnings-forecast';
 
 export async function GET() {
-  const { member } = await getDemoSafeClient();
-  const admin = createAdminClient();
-
-  if (!member) {
-    return NextResponse.json({ error: 'No membership' }, { status: 403 });
-  }
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member, client } = auth;
 
   if (member.role === 'admin') {
-    // Demo mode or admin: pick the first coach from the club
-    const { data: firstCoach } = await admin
+    // Admin: pick the first coach from the club
+    const { data: firstCoach } = await client
       .from('club_members')
       .select('id, club_id')
       .eq('club_id', member.club_id)
@@ -23,7 +19,7 @@ export async function GET() {
       .single();
 
     if (!firstCoach) return NextResponse.json({ error: 'No coaches found' }, { status: 404 });
-    const forecast = await generateEarningsForecast(firstCoach.id, firstCoach.club_id, admin);
+    const forecast = await generateEarningsForecast(firstCoach.id, firstCoach.club_id, client);
     return NextResponse.json(forecast);
   }
 
@@ -31,6 +27,6 @@ export async function GET() {
     return NextResponse.json({ error: 'Coach access required' }, { status: 403 });
   }
 
-  const forecast = await generateEarningsForecast(member.id, member.club_id, admin);
+  const forecast = await generateEarningsForecast(member.id, member.club_id, client);
   return NextResponse.json(forecast);
 }

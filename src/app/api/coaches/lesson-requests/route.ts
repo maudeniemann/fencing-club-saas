@@ -1,30 +1,17 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { getDemoSafeClient } from '@/lib/supabase/demo-client';
+import { getAuthenticatedMember } from '@/lib/auth/get-authenticated-member';
 
 export async function GET() {
-  const { client: supabase, user } = await getDemoSafeClient();
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member, client } = auth;
 
-  if (!user) {
-    // Demo mode: return empty list (no coach context)
-    return NextResponse.json([]);
-  }
-
-  // Get current coach member
-  const { data: member } = await supabase
-    .from('club_members')
-    .select('id, role')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!member) return NextResponse.json({ error: 'No membership' }, { status: 403 });
   if (member.role !== 'coach' && member.role !== 'admin') {
     return NextResponse.json({ error: 'Coaches only' }, { status: 403 });
   }
 
   // Fetch all waitlist + lesson requests for this coach
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('waitlist_entries')
     .select(`
       *,

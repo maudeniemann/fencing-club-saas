@@ -10,7 +10,6 @@ import {
   format,
   parse,
   isToday,
-  isWithinInterval,
   isBefore,
   startOfDay,
 } from 'date-fns';
@@ -24,28 +23,16 @@ import {
   TOTAL_HOURS,
   timeToPixels,
 } from '@/components/calendar/calendar-utils';
+import { InstantBookingDialog } from '@/components/booking/instant-booking-dialog';
+import { useClub } from '@/providers/club-provider';
+import type { ComputedSlot } from '@/types';
 
-interface AvailabilitySlot {
-  id: string;
+interface SlotForBooking {
+  date: string;
   start_time: string;
   end_time: string;
-  slot_date: string | null;
-  is_recurring: boolean;
-  day_of_week: number | null;
-}
-
-interface Booking {
-  id: string;
-  starts_at: string;
-  ends_at: string;
-  status: string;
-}
-
-interface ResolvedSlot {
-  id: string;
-  startTime: Date;
-  endTime: Date;
-  isBooked: boolean;
+  coach_member_id: string;
+  venue_id: string | null;
 }
 
 export default function CoachAvailabilityPage({
@@ -54,11 +41,14 @@ export default function CoachAvailabilityPage({
   params: Promise<{ id: string }>;
 }) {
   const { id: coachId } = use(params);
+  const { role } = useClub();
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
   const [selectedDayIndex, setSelectedDayIndex] = useState(() => {
     const today = new Date().getDay(); // 0=Sun
-    return today; // daysInWeek starts on Sunday (weekStartsOn: 0)
+    return today;
   });
+  const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<SlotForBooking | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const weekStart = startOfWeek(addWeeks(new Date(), currentWeekOffset), {
@@ -76,109 +66,40 @@ export default function CoachAvailabilityPage({
     },
   });
 
-  const { data, isLoading } = useQuery({
-    queryKey: [
-      'coach-availability',
-      coachId,
-      weekStart.toISOString(),
-      weekEnd.toISOString(),
-    ],
+  // Fetch subdivided 30-min slots
+  const { data: slots = [], isLoading } = useQuery({
+    queryKey: ['available-slots', coachId, weekStart.toISOString()],
     queryFn: async () => {
+      const mondayStart = startOfWeek(weekStart, { weekStartsOn: 1 });
       const res = await fetch(
-        `/api/coaches/${coachId}/availability?start_date=${format(weekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`
+        `/api/coaches/${coachId}/available-slots?week_start=${format(mondayStart, 'yyyy-MM-dd')}`
       );
-      if (!res.ok) throw new Error('Failed to fetch availability');
-      return res.json() as Promise<{
-        availability_slots: AvailabilitySlot[];
-        bookings: Booking[];
-      }>;
+      if (!res.ok) return [];
+      return (await res.json()) as ComputedSlot[];
     },
   });
 
-  // Resolve slots for each day
+  // Group slots by day
   const slotsByDay = useMemo(() => {
-    const map = new Map<string, ResolvedSlot[]>();
-
-    for (const day of daysInWeek) {
-      const dayOfWeek = day.getDay();
-      const dateStr = format(day, 'yyyy-MM-dd');
-      const slots: ResolvedSlot[] = [];
-
-      // Recurring slots
-      data?.availability_slots
-        .filter((s) => s.is_recurring && s.day_of_week === dayOfWeek)
-        .forEach((slot) => {
-          const startTime = parse(
-            `${dateStr} ${slot.start_time}`,
-            'yyyy-MM-dd HH:mm:ss',
-            new Date()
-          );
-          const endTime = parse(
-            `${dateStr} ${slot.end_time}`,
-            'yyyy-MM-dd HH:mm:ss',
-            new Date()
-          );
-
-          const isBooked =
-            data?.bookings.some((b) => {
-              const bs = new Date(b.starts_at);
-              const be = new Date(b.ends_at);
-              return (
-                isWithinInterval(bs, { start: startTime, end: endTime }) ||
-                isWithinInterval(startTime, { start: bs, end: be })
-              );
-            }) || false;
-
-          slots.push({ id: slot.id, startTime, endTime, isBooked });
-        });
-
-      // One-time slots
-      data?.availability_slots
-        .filter((s) => !s.is_recurring && s.slot_date === dateStr)
-        .forEach((slot) => {
-          const startTime = parse(
-            `${dateStr} ${slot.start_time}`,
-            'yyyy-MM-dd HH:mm:ss',
-            new Date()
-          );
-          const endTime = parse(
-            `${dateStr} ${slot.end_time}`,
-            'yyyy-MM-dd HH:mm:ss',
-            new Date()
-          );
-
-          const isBooked =
-            data?.bookings.some((b) => {
-              const bs = new Date(b.starts_at);
-              const be = new Date(b.ends_at);
-              return (
-                isWithinInterval(bs, { start: startTime, end: endTime }) ||
-                isWithinInterval(startTime, { start: bs, end: be })
-              );
-            }) || false;
-
-          slots.push({ id: slot.id, startTime, endTime, isBooked });
-        });
-
-      slots.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
-      map.set(dateStr, slots);
+    const map = new Map<string, ComputedSlot[]>();
+    for (const slot of slots) {
+      const existing = map.get(slot.date) || [];
+      existing.push(slot);
+      map.set(slot.date, existing);
     }
-
     return map;
-  }, [data, daysInWeek]);
+  }, [slots]);
 
   // Summary stats
   const { availableCount, bookedCount } = useMemo(() => {
     let available = 0;
     let booked = 0;
-    slotsByDay.forEach((slots) => {
-      slots.forEach((s) => {
-        if (s.isBooked) booked++;
-        else available++;
-      });
-    });
+    for (const slot of slots) {
+      if (slot.is_booked) booked++;
+      else available++;
+    }
     return { availableCount: available, bookedCount: booked };
-  }, [slotsByDay]);
+  }, [slots]);
 
   // Auto-scroll to 8 AM on mount / week change
   useEffect(() => {
@@ -187,6 +108,21 @@ export default function CoachAvailabilityPage({
       scrollRef.current.scrollTop = eightAM - 20;
     }
   }, [currentWeekOffset]);
+
+  const handleSlotClick = (slot: ComputedSlot) => {
+    if (slot.is_booked) return;
+    if (role !== 'player') return;
+    setSelectedSlot({
+      date: slot.date,
+      start_time: slot.start_time,
+      end_time: slot.end_time,
+      coach_member_id: slot.coach_member_id,
+      venue_id: slot.venue_id,
+    });
+    setBookingDialogOpen(true);
+  };
+
+  const isPlayer = role === 'player';
 
   if (isLoading) {
     return (
@@ -204,7 +140,9 @@ export default function CoachAvailabilityPage({
           {coach?.display_name || 'Coach'} Availability
         </h1>
         <p className="text-muted-foreground">
-          View available time slots for booking
+          {isPlayer
+            ? 'Tap an available slot to book a lesson'
+            : 'View available time slots'}
         </p>
       </div>
 
@@ -317,78 +255,20 @@ export default function CoachAvailabilityPage({
           {(() => {
             const day = daysInWeek[selectedDayIndex];
             const dateStr = format(day, 'yyyy-MM-dd');
-            const slots = slotsByDay.get(dateStr) || [];
+            const daySlots = slotsByDay.get(dateStr) || [];
             const today = isToday(day);
             const isPast = isBefore(day, startOfDay(new Date()));
 
             return (
               <div className={cn('flex-1 min-w-0', isPast && 'opacity-50')}>
-                <div
-                  className={cn(
-                    'sticky top-0 z-20 flex flex-col items-center py-1.5 border-b border-r border-border/50 bg-background/95 backdrop-blur-sm',
-                    today && 'bg-primary/5'
-                  )}
-                >
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase">
-                    {format(day, 'EEE')}
-                  </span>
-                  <span
-                    className={cn(
-                      'flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold',
-                      today
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-foreground'
-                    )}
-                  >
-                    {format(day, 'd')}
-                  </span>
-                </div>
-
-                <div
-                  className="relative border-r border-border/50"
-                  style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}
-                >
-                  {Array.from({ length: TOTAL_HOURS }, (_, i) => (
-                    <div
-                      key={i}
-                      className="absolute left-0 right-0 border-t border-border/30"
-                      style={{ top: i * HOUR_HEIGHT }}
-                    />
-                  ))}
-                  {today && <CurrentTimeIndicator />}
-                  {slots.map((slot) => {
-                    const top = timeToPixels(slot.startTime);
-                    const height = Math.max(
-                      timeToPixels(slot.endTime) - top,
-                      20
-                    );
-                    const timeLabel = `${format(slot.startTime, 'h:mm a')} – ${format(slot.endTime, 'h:mm a')}`;
-
-                    return (
-                      <div
-                        key={slot.id}
-                        className={cn(
-                          'absolute left-1 right-1 rounded-md border-l-[3px] px-1.5 py-1 overflow-hidden text-[11px] leading-tight transition-colors',
-                          slot.isBooked
-                            ? 'bg-muted border-l-muted-foreground/30 text-muted-foreground'
-                            : 'bg-emerald-50 border-l-emerald-500 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200'
-                        )}
-                        style={{
-                          top,
-                          height,
-                          position: 'absolute',
-                        }}
-                      >
-                        <div className="font-medium truncate">{timeLabel}</div>
-                        {slot.isBooked && (
-                          <div className="text-[10px] opacity-70 line-through">
-                            Booked
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                <DayColumnHeader day={day} today={today} />
+                <DayColumnGrid
+                  daySlots={daySlots}
+                  today={today}
+                  dateStr={dateStr}
+                  isPlayer={isPlayer}
+                  onSlotClick={handleSlotClick}
+                />
               </div>
             );
           })()}
@@ -399,83 +279,128 @@ export default function CoachAvailabilityPage({
           <TimeGutter />
           {daysInWeek.map((day) => {
             const dateStr = format(day, 'yyyy-MM-dd');
-            const slots = slotsByDay.get(dateStr) || [];
+            const daySlots = slotsByDay.get(dateStr) || [];
             const today = isToday(day);
             const isPast = isBefore(day, startOfDay(new Date()));
 
             return (
               <div key={dateStr} className={cn('flex-1 min-w-0', isPast && 'opacity-50')}>
-                <div
-                  className={cn(
-                    'sticky top-0 z-20 flex flex-col items-center py-1.5 border-b border-r border-border/50 bg-background/95 backdrop-blur-sm',
-                    today && 'bg-primary/5'
-                  )}
-                >
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase">
-                    {format(day, 'EEE')}
-                  </span>
-                  <span
-                    className={cn(
-                      'flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold',
-                      today
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-foreground'
-                    )}
-                  >
-                    {format(day, 'd')}
-                  </span>
-                </div>
-
-                <div
-                  className="relative border-r border-border/50"
-                  style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}
-                >
-                  {Array.from({ length: TOTAL_HOURS }, (_, i) => (
-                    <div
-                      key={i}
-                      className="absolute left-0 right-0 border-t border-border/30"
-                      style={{ top: i * HOUR_HEIGHT }}
-                    />
-                  ))}
-                  {today && <CurrentTimeIndicator />}
-                  {slots.map((slot) => {
-                    const top = timeToPixels(slot.startTime);
-                    const height = Math.max(
-                      timeToPixels(slot.endTime) - top,
-                      20
-                    );
-                    const timeLabel = `${format(slot.startTime, 'h:mm a')} – ${format(slot.endTime, 'h:mm a')}`;
-
-                    return (
-                      <div
-                        key={slot.id}
-                        className={cn(
-                          'absolute left-1 right-1 rounded-md border-l-[3px] px-1.5 py-1 overflow-hidden text-[11px] leading-tight transition-colors',
-                          slot.isBooked
-                            ? 'bg-muted border-l-muted-foreground/30 text-muted-foreground'
-                            : 'bg-emerald-50 border-l-emerald-500 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200'
-                        )}
-                        style={{
-                          top,
-                          height,
-                          position: 'absolute',
-                        }}
-                      >
-                        <div className="font-medium truncate">{timeLabel}</div>
-                        {slot.isBooked && (
-                          <div className="text-[10px] opacity-70 line-through">
-                            Booked
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                <DayColumnHeader day={day} today={today} />
+                <DayColumnGrid
+                  daySlots={daySlots}
+                  today={today}
+                  dateStr={dateStr}
+                  isPlayer={isPlayer}
+                  onSlotClick={handleSlotClick}
+                />
               </div>
             );
           })}
         </div>
       </div>
+
+      {/* Instant Booking Dialog */}
+      <InstantBookingDialog
+        open={bookingDialogOpen}
+        onOpenChange={setBookingDialogOpen}
+        slot={selectedSlot}
+        coachName={coach?.display_name || 'Coach'}
+      />
+    </div>
+  );
+}
+
+function DayColumnHeader({ day, today }: { day: Date; today: boolean }) {
+  return (
+    <div
+      className={cn(
+        'sticky top-0 z-20 flex flex-col items-center py-1.5 border-b border-r border-border/50 bg-background/95 backdrop-blur-sm',
+        today && 'bg-primary/5'
+      )}
+    >
+      <span className="text-[11px] font-medium text-muted-foreground uppercase">
+        {format(day, 'EEE')}
+      </span>
+      <span
+        className={cn(
+          'flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold',
+          today
+            ? 'bg-primary text-primary-foreground'
+            : 'text-foreground'
+        )}
+      >
+        {format(day, 'd')}
+      </span>
+    </div>
+  );
+}
+
+function DayColumnGrid({
+  daySlots,
+  today,
+  dateStr,
+  isPlayer,
+  onSlotClick,
+}: {
+  daySlots: ComputedSlot[];
+  today: boolean;
+  dateStr: string;
+  isPlayer: boolean;
+  onSlotClick: (slot: ComputedSlot) => void;
+}) {
+  return (
+    <div
+      className="relative border-r border-border/50"
+      style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}
+    >
+      {Array.from({ length: TOTAL_HOURS }, (_, i) => (
+        <div
+          key={i}
+          className="absolute left-0 right-0 border-t border-border/30"
+          style={{ top: i * HOUR_HEIGHT }}
+        />
+      ))}
+      {today && <CurrentTimeIndicator />}
+      {daySlots.map((slot, idx) => {
+        const startTime = parse(
+          `${dateStr} ${slot.start_time}`,
+          'yyyy-MM-dd HH:mm:ss',
+          new Date()
+        );
+        const endTime = parse(
+          `${dateStr} ${slot.end_time}`,
+          'yyyy-MM-dd HH:mm:ss',
+          new Date()
+        );
+        const top = timeToPixels(startTime);
+        const height = Math.max(timeToPixels(endTime) - top, 20);
+        const timeLabel = format(startTime, 'h:mm a');
+        const canBook = isPlayer && !slot.is_booked;
+
+        return (
+          <button
+            key={`${slot.date}-${slot.start_time}-${idx}`}
+            onClick={() => canBook && onSlotClick(slot)}
+            disabled={!canBook}
+            className={cn(
+              'absolute left-1 right-1 rounded-md border-l-[3px] px-1.5 py-0.5 overflow-hidden text-[11px] leading-tight transition-all text-left',
+              slot.is_booked
+                ? 'bg-muted border-l-muted-foreground/30 text-muted-foreground cursor-default'
+                : canBook
+                  ? 'bg-emerald-50 border-l-emerald-500 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-950/60 hover:shadow-sm active:scale-[0.98]'
+                  : 'bg-emerald-50 border-l-emerald-500 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 cursor-default'
+            )}
+            style={{ top, height }}
+          >
+            <div className="font-medium truncate">{timeLabel}</div>
+            {slot.is_booked ? (
+              <div className="text-[10px] opacity-70">Booked</div>
+            ) : canBook ? (
+              <div className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">Tap to book</div>
+            ) : null}
+          </button>
+        );
+      })}
     </div>
   );
 }

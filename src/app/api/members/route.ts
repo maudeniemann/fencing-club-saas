@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getDemoSafeClient } from '@/lib/supabase/demo-client';
+import { getAuthenticatedMember } from '@/lib/auth/get-authenticated-member';
 import { z } from 'zod';
 
 const createMemberSchema = z.object({
@@ -29,16 +29,14 @@ async function getAdminMember(supabase: Awaited<ReturnType<typeof createClient>>
 }
 
 export async function GET(request: NextRequest) {
-  const { client: supabase, member: currentMember } = await getDemoSafeClient();
-
-  if (!currentMember) {
-    return NextResponse.json([]);
-  }
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member: currentMember, client } = auth;
 
   const { searchParams } = new URL(request.url);
   const role = searchParams.get('role');
 
-  let query = supabase
+  let query = client
     .from('club_members')
     .select('*')
     .eq('club_id', currentMember.club_id)

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { getDemoSafeClient } from '@/lib/supabase/demo-client';
+import { getAuthenticatedMember } from '@/lib/auth/get-authenticated-member';
 import { z } from 'zod';
 
 const createVenueSchema = z.object({
@@ -9,13 +9,11 @@ const createVenueSchema = z.object({
 });
 
 export async function GET() {
-  const { client: supabase, member } = await getDemoSafeClient();
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member, client } = auth;
 
-  if (!member) {
-    return NextResponse.json([]);
-  }
-
-  const { data } = await supabase
+  const { data } = await client
     .from('venues')
     .select('*, strips(*)')
     .eq('club_id', member.club_id)

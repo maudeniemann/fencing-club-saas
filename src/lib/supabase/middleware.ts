@@ -29,20 +29,23 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Public routes that don't need auth
+  // Public routes that don't need auth redirect
+  // API routes handle their own auth via getAuthenticatedMember()
   const isPublicRoute =
     request.nextUrl.pathname === '/' ||
     request.nextUrl.pathname.startsWith('/auth') ||
-    request.nextUrl.pathname.startsWith('/api/stripe/webhooks') ||
-    request.nextUrl.pathname.startsWith('/api/calendar/webhook');
+    request.nextUrl.pathname.startsWith('/api');
 
-  // TEMP: Allow unauthenticated browsing for demo/preview
+  // Redirect unauthenticated page requests to login
   if (!user && !isPublicRoute) {
-    return supabaseResponse;
+    const url = request.nextUrl.clone();
+    url.pathname = '/auth/login';
+    return NextResponse.redirect(url);
   }
 
-  // If authenticated, resolve club membership
-  if (user && !isPublicRoute && !request.nextUrl.pathname.startsWith('/auth/onboarding') && !request.nextUrl.pathname.startsWith('/api/onboarding') && !request.nextUrl.pathname.startsWith('/api/seed')) {
+  // If authenticated on a page route, resolve club membership
+  const isPageRoute = !request.nextUrl.pathname.startsWith('/api') && !request.nextUrl.pathname.startsWith('/auth');
+  if (user && isPageRoute) {
     const { data: membership } = await supabase
       .from('club_members')
       .select('id, club_id, role')
