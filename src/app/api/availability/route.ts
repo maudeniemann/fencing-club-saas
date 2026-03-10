@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getDemoSafeClient } from '@/lib/supabase/demo-client';
 import { getAvailableSlots } from '@/lib/scheduling/availability';
 import { addDays } from 'date-fns';
 import { z } from 'zod';
@@ -20,19 +21,7 @@ const createSlotSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: member } = await supabase
-    .from('club_members')
-    .select('id, club_id')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!member) return NextResponse.json({ error: 'No membership' }, { status: 403 });
+  const { client: supabase, member } = await getDemoSafeClient();
 
   const { searchParams } = new URL(request.url);
   const coachId = searchParams.get('coach_id');
@@ -42,14 +31,21 @@ export async function GET(request: NextRequest) {
   if (coachId) {
     // Get computed available slots for a specific coach
     const admin = createAdminClient();
+    const resolvedClubId = member?.club_id;
+    if (!resolvedClubId) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
+
     const slots = await getAvailableSlots({
       supabase: admin,
-      clubId: member.club_id,
+      clubId: resolvedClubId,
       coachMemberId: coachId,
       dateFrom: new Date(fromDate),
       dateTo: toDate ? new Date(toDate) : addDays(new Date(fromDate), 28),
     });
     return NextResponse.json(slots);
+  }
+
+  if (!member) {
+    return NextResponse.json([]);
   }
 
   // Get raw availability slots for current coach

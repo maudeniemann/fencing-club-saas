@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { createClient } from '@/lib/supabase/client';
 import { useClub } from '@/providers/club-provider';
 import { format } from 'date-fns';
 import type { DisputeStatus } from '@/types';
@@ -51,15 +50,12 @@ interface DisputeWithRelations {
   refund_amount_cents: number;
   created_at: string;
   updated_at: string;
-  booking: {
+  bookings: {
     booking_number: string;
     starts_at: string;
   } | null;
   filed_by: {
     display_name: string | null;
-  } | null;
-  payment: {
-    amount_cents: number;
   } | null;
 }
 
@@ -92,17 +88,9 @@ export default function DisputesPage() {
     queryKey: ['disputes', club?.id],
     queryFn: async () => {
       if (!club) return [];
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('disputes')
-        .select(
-          '*, booking:bookings(booking_number, starts_at), filed_by:club_members!disputes_filed_by_member_id_fkey(display_name), payment:payments(amount_cents)'
-        )
-        .eq('club_id', club.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data as DisputeWithRelations[];
+      const res = await fetch('/api/disputes');
+      if (!res.ok) throw new Error('Failed to fetch disputes');
+      return res.json() as Promise<DisputeWithRelations[]>;
     },
     enabled: !!club,
   });
@@ -168,7 +156,7 @@ export default function DisputesPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle className="text-lg">
-                      Booking #{dispute.booking?.booking_number ?? 'Unknown'}
+                      Booking #{dispute.bookings?.booking_number ?? 'Unknown'}
                     </CardTitle>
                     <CardDescription>
                       Filed by {dispute.filed_by?.display_name ?? 'Unknown'} on{' '}
@@ -189,26 +177,17 @@ export default function DisputesPage() {
                   <p className="text-sm mt-1">{dispute.reason}</p>
                 </div>
 
-                {dispute.booking?.starts_at && (
+                {dispute.bookings?.starts_at && (
                   <div>
                     <Label className="text-sm font-medium">Booking Date</Label>
                     <p className="text-sm text-muted-foreground mt-1">
                       {format(
-                        new Date(dispute.booking.starts_at),
+                        new Date(dispute.bookings!.starts_at),
                         'MMM d, yyyy h:mm a'
                       )}
                     </p>
                   </div>
                 )}
-
-                {dispute.payment ? (
-                  <div>
-                    <Label className="text-sm font-medium">Payment Amount</Label>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      ${(dispute.payment.amount_cents / 100).toFixed(2)}
-                    </p>
-                  </div>
-                ) : null}
 
                 {dispute.evidence_urls && dispute.evidence_urls.length > 0 && (
                   <div>
@@ -277,7 +256,7 @@ export default function DisputesPage() {
                           <DialogTitle>Resolve Dispute</DialogTitle>
                           <DialogDescription>
                             Choose a resolution for booking #
-                            {dispute.booking?.booking_number ?? 'Unknown'}.
+                            {dispute.bookings?.booking_number ?? 'Unknown'}.
                           </DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4 py-4">

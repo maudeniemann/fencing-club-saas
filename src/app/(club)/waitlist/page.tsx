@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useClub } from '@/providers/club-provider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,21 +10,15 @@ import { format, parseISO, formatDistanceToNow, isPast } from 'date-fns';
 
 export default function WaitlistPage() {
   const { club, currentMember, role, isLoading: clubLoading } = useClub();
-  const supabase = createClient();
   const queryClient = useQueryClient();
 
   const { data: entries = [], isLoading: entriesLoading } = useQuery({
     queryKey: ['waitlist-entries', currentMember?.id],
     queryFn: async () => {
       if (!currentMember) return [];
-      const { data } = await supabase
-        .from('waitlist_entries')
-        .select(
-          '*, coach:club_members!waitlist_entries_coach_member_id_fkey(display_name), lesson_type:lesson_types(name)'
-        )
-        .eq('player_member_id', currentMember.id)
-        .order('created_at', { ascending: false });
-      return data || [];
+      const res = await fetch('/api/waitlist');
+      if (!res.ok) return [];
+      return res.json();
     },
     enabled: !!currentMember && !!club,
   });
@@ -98,7 +91,7 @@ export default function WaitlistPage() {
         <div className="grid gap-4">
           {entries.map((entry: Record<string, unknown>) => {
             const coach = entry.coach as Record<string, unknown> | null;
-            const lessonType = entry.lesson_type as Record<string, unknown> | null;
+            const lessonType = (entry.lesson_type || entry.lesson_types) as Record<string, unknown> | null;
             const status = entry.status as string;
             const acceptDeadline = entry.accept_deadline as string | null;
             const isNotified = status === 'notified';

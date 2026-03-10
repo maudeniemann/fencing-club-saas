@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getDemoSafeClient } from '@/lib/supabase/demo-client';
 import { z } from 'zod';
 
 const joinWaitlistSchema = z.object({
@@ -15,23 +16,27 @@ const joinWaitlistSchema = z.object({
 });
 
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { client: supabase, user, member: currentMember } = await getDemoSafeClient();
 
-  const { data: member } = await supabase
-    .from('club_members')
-    .select('id')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
+  if (!currentMember) {
+    return NextResponse.json([]);
+  }
 
-  if (!member) return NextResponse.json({ error: 'No membership' }, { status: 403 });
+  if (!user) {
+    // Demo mode: return waitlist entries for the demo club
+    const { data } = await supabase
+      .from('waitlist_entries')
+      .select('*, coach:club_members!waitlist_entries_coach_member_id_fkey(display_name), lesson_types(name)')
+      .eq('club_id', currentMember.club_id)
+      .in('status', ['waiting', 'notified'])
+      .order('created_at', { ascending: false });
+    return NextResponse.json(data || []);
+  }
 
   const { data } = await supabase
     .from('waitlist_entries')
     .select('*, coach:club_members!waitlist_entries_coach_member_id_fkey(display_name), lesson_types(name)')
-    .or(`player_member_id.eq.${member.id},booked_by_member_id.eq.${member.id}`)
+    .or(`player_member_id.eq.${currentMember.id},booked_by_member_id.eq.${currentMember.id}`)
     .in('status', ['waiting', 'notified'])
     .order('created_at', { ascending: false });
 

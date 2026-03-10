@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { createClient } from '@/lib/supabase/client';
 import { useClub } from '@/providers/club-provider';
 import { format } from 'date-fns';
 import type { ClubMember, CoachPayout } from '@/types';
@@ -50,17 +49,9 @@ export default function PayoutsPage() {
     queryKey: ['coaches', club?.id],
     queryFn: async () => {
       if (!club) return [];
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('club_members')
-        .select('*')
-        .eq('club_id', club.id)
-        .eq('role', 'coach')
-        .eq('is_active', true)
-        .order('display_name');
-
-      if (error) throw error;
-      return data as ClubMember[];
+      const res = await fetch('/api/members?role=coach');
+      if (!res.ok) throw new Error('Failed to fetch coaches');
+      return res.json() as Promise<ClubMember[]>;
     },
     enabled: !!club,
   });
@@ -70,15 +61,9 @@ export default function PayoutsPage() {
     queryKey: ['payouts', club?.id],
     queryFn: async () => {
       if (!club) return [];
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('coach_payouts')
-        .select('*, coach:club_members!coach_payouts_coach_member_id_fkey(display_name)')
-        .eq('club_id', club.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data as (CoachPayout & { coach: { display_name: string | null } })[];
+      const res = await fetch('/api/coach-payouts');
+      if (!res.ok) throw new Error('Failed to fetch payouts');
+      return res.json() as Promise<(CoachPayout & { coach: { display_name: string | null } })[]>;
     },
     enabled: !!club,
   });

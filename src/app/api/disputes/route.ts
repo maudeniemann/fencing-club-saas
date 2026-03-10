@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getDemoSafeClient } from '@/lib/supabase/demo-client';
 import { z } from 'zod';
 
 const fileDisputeSchema = z.object({
@@ -10,13 +11,16 @@ const fileDisputeSchema = z.object({
 });
 
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { client: supabase, member } = await getDemoSafeClient();
+
+  if (!member) {
+    return NextResponse.json([]);
+  }
 
   const { data } = await supabase
     .from('disputes')
     .select('*, bookings(booking_number, starts_at, coach:club_members!bookings_coach_member_id_fkey(display_name)), filed_by:club_members!disputes_filed_by_member_id_fkey(display_name)')
+    .eq('club_id', member.club_id)
     .order('created_at', { ascending: false });
 
   return NextResponse.json(data || []);

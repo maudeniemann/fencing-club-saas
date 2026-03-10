@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { createClient } from '@/lib/supabase/client';
 import { useClub } from '@/providers/club-provider';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -75,15 +74,9 @@ export default function MembersPage() {
     queryKey: ['members', club?.id],
     queryFn: async () => {
       if (!club) return [];
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('club_members')
-        .select('*')
-        .eq('club_id', club.id)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      return data as ClubMember[];
+      const res = await fetch('/api/members');
+      if (!res.ok) throw new Error('Failed to fetch members');
+      return res.json() as Promise<ClubMember[]>;
     },
     enabled: !!club,
   });

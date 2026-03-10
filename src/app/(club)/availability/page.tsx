@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useClub } from '@/providers/club-provider';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+// createClient is retained for handleDelete (no DELETE API route exists yet)
 import { createClient } from '@/lib/supabase/client';
 import { RoleGate } from '@/components/layout/role-gate';
 import { format } from 'date-fns';
@@ -39,7 +40,6 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 
 export default function AvailabilityPage() {
   const { club, currentMember, role, isLoading: clubLoading } = useClub();
-  const supabase = createClient();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -60,21 +60,9 @@ export default function AvailabilityPage() {
     queryKey: ['availability-slots', currentMember?.id, role],
     queryFn: async () => {
       if (!currentMember || !club) return [];
-
-      let query = supabase
-        .from('availability_slots')
-        .select('*, venue:venues(name)')
-        .eq('club_id', club.id)
-        .order('day_of_week', { ascending: true })
-        .order('start_time', { ascending: true });
-
-      // Coaches see only their own; admins see all
-      if (role === 'coach') {
-        query = query.eq('coach_member_id', currentMember.id);
-      }
-
-      const { data } = await query;
-      return (data || []) as (AvailabilitySlot & { venue: { name: string } | null })[];
+      const res = await fetch('/api/availability');
+      if (!res.ok) return [];
+      return (await res.json()) as (AvailabilitySlot & { venue: { name: string } | null })[];
     },
     enabled: !!currentMember && !!club && (role === 'coach' || role === 'admin'),
   });
@@ -84,13 +72,9 @@ export default function AvailabilityPage() {
     queryKey: ['venues', club?.id],
     queryFn: async () => {
       if (!club) return [];
-      const { data } = await supabase
-        .from('venues')
-        .select('*')
-        .eq('club_id', club.id)
-        .eq('is_active', true)
-        .order('name');
-      return (data || []) as Venue[];
+      const res = await fetch('/api/venues');
+      if (!res.ok) return [];
+      return (await res.json()) as Venue[];
     },
     enabled: !!club,
   });
@@ -151,6 +135,8 @@ export default function AvailabilityPage() {
   };
 
   const handleDelete = async (slotId: string) => {
+    // TODO: Replace with DELETE API route when available
+    const supabase = createClient();
     const { error } = await supabase
       .from('availability_slots')
       .delete()

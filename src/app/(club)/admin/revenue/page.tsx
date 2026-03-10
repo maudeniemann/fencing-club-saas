@@ -2,10 +2,7 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { createClient } from '@/lib/supabase/client';
 import { useClub } from '@/providers/club-provider';
-import { format, startOfMonth } from 'date-fns';
-import type { Payment } from '@/types';
 
 import {
   Card,
@@ -24,97 +21,60 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
+interface MonthlyRevenue {
+  month: string;
+  revenue_cents: number;
+  booking_count: number;
+}
+
+interface CoachRevenue {
+  coach_id: string;
+  coach_name: string;
+  revenue_cents: number;
+  lesson_count: number;
+}
+
+interface RevenueData {
+  monthly_revenue: MonthlyRevenue[];
+  coach_revenue: CoachRevenue[];
+}
+
 export default function RevenuePage() {
   const { club } = useClub();
 
-  const { data: payments, isLoading } = useQuery({
-    queryKey: ['payments', club?.id],
+  const { data: revenueData, isLoading } = useQuery({
+    queryKey: ['revenue', club?.id],
     queryFn: async () => {
-      if (!club) return [];
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('club_id', club.id)
-        .eq('status', 'succeeded')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data as Payment[];
+      if (!club) return null;
+      const res = await fetch('/api/analytics/revenue');
+      if (!res.ok) throw new Error('Failed to fetch revenue data');
+      return res.json() as Promise<RevenueData>;
     },
     enabled: !!club,
   });
 
-  // Calculate summary stats
+  // Calculate summary stats from monthly data
   const summary = useMemo(() => {
-    if (!payments || payments.length === 0) {
+    if (!revenueData || revenueData.monthly_revenue.length === 0) {
       return {
         totalRevenue: 0,
-        platformFees: 0,
-        netRevenue: 0,
+        totalBookings: 0,
         avgPerBooking: 0,
       };
     }
 
-    const totalRevenue = payments.reduce((sum, p) => sum + p.amount_cents, 0);
-    const platformFees = payments.reduce(
-      (sum, p) => sum + p.platform_fee_cents,
+    const totalRevenue = revenueData.monthly_revenue.reduce(
+      (sum, m) => sum + m.revenue_cents,
       0
     );
-    const netRevenue = payments.reduce(
-      (sum, p) => sum + p.club_amount_cents,
+    const totalBookings = revenueData.monthly_revenue.reduce(
+      (sum, m) => sum + m.booking_count,
       0
     );
-    const avgPerBooking = totalRevenue / payments.length;
+    const avgPerBooking = totalBookings > 0 ? totalRevenue / totalBookings : 0;
 
-    return { totalRevenue, platformFees, netRevenue, avgPerBooking };
-  }, [payments]);
-
-  // Calculate monthly breakdown
-  const monthlyData = useMemo(() => {
-    if (!payments || payments.length === 0) return [];
-
-    const grouped = new Map<
-      string,
-      {
-        month: string;
-        revenue: number;
-        fees: number;
-        net: number;
-        count: number;
-      }
-    >();
-
-    for (const payment of payments) {
-      const monthKey = format(
-        startOfMonth(new Date(payment.created_at)),
-        'yyyy-MM'
-      );
-      const monthLabel = format(
-        startOfMonth(new Date(payment.created_at)),
-        'MMMM yyyy'
-      );
-
-      const existing = grouped.get(monthKey) ?? {
-        month: monthLabel,
-        revenue: 0,
-        fees: 0,
-        net: 0,
-        count: 0,
-      };
-
-      existing.revenue += payment.amount_cents;
-      existing.fees += payment.platform_fee_cents;
-      existing.net += payment.club_amount_cents;
-      existing.count += 1;
-
-      grouped.set(monthKey, existing);
-    }
-
-    return Array.from(grouped.entries())
-      .sort(([a], [b]) => b.localeCompare(a))
-      .map(([, data]) => data);
-  }, [payments]);
+    return { totalRevenue, totalBookings, avgPerBooking };
+  }, [revenueData]);
 
   if (isLoading) {
     return (
@@ -124,7 +84,10 @@ export default function RevenuePage() {
     );
   }
 
-  if (!payments || payments.length === 0) {
+  if (
+    !revenueData ||
+    revenueData.monthly_revenue.every((m) => m.revenue_cents === 0 && m.booking_count === 0)
+  ) {
     return (
       <div className="space-y-6">
         <div>
@@ -152,7 +115,7 @@ export default function RevenuePage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Total Revenue</CardDescription>
@@ -163,17 +126,9 @@ export default function RevenuePage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Platform Fees</CardDescription>
-            <CardTitle className="text-3xl text-orange-600">
-              ${(summary.platformFees / 100).toFixed(2)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Net Revenue</CardDescription>
-            <CardTitle className="text-3xl text-green-600">
-              ${(summary.netRevenue / 100).toFixed(2)}
+            <CardDescription>Total Bookings</CardDescription>
+            <CardTitle className="text-3xl">
+              {summary.totalBookings}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -199,25 +154,19 @@ export default function RevenuePage() {
                 <TableRow>
                   <TableHead>Month</TableHead>
                   <TableHead className="text-right">Revenue</TableHead>
-                  <TableHead className="text-right">Fees</TableHead>
-                  <TableHead className="text-right">Net</TableHead>
                   <TableHead className="text-right">Bookings</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {monthlyData.map((row) => (
+                {revenueData.monthly_revenue.map((row) => (
                   <TableRow key={row.month}>
                     <TableCell className="font-medium">{row.month}</TableCell>
                     <TableCell className="text-right">
-                      ${(row.revenue / 100).toFixed(2)}
+                      ${(row.revenue_cents / 100).toFixed(2)}
                     </TableCell>
-                    <TableCell className="text-right text-orange-600">
-                      ${(row.fees / 100).toFixed(2)}
+                    <TableCell className="text-right">
+                      {row.booking_count}
                     </TableCell>
-                    <TableCell className="text-right text-green-600">
-                      ${(row.net / 100).toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right">{row.count}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -225,6 +174,46 @@ export default function RevenuePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Coach Revenue (Current Month) */}
+      {revenueData.coach_revenue.length > 0 && (
+        <>
+          <Separator />
+          <div>
+            <h2 className="text-xl font-semibold mb-4">
+              Coach Revenue (Current Month)
+            </h2>
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Coach</TableHead>
+                      <TableHead className="text-right">Revenue</TableHead>
+                      <TableHead className="text-right">Lessons</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {revenueData.coach_revenue.map((coach) => (
+                      <TableRow key={coach.coach_id}>
+                        <TableCell className="font-medium">
+                          {coach.coach_name}
+                        </TableCell>
+                        <TableCell className="text-right text-green-600">
+                          ${(coach.revenue_cents / 100).toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {coach.lesson_count}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
     </div>
   );
 }

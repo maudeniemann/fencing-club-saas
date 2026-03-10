@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getDemoSafeClient } from '@/lib/supabase/demo-client';
 
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { client: supabase, user } = await getDemoSafeClient();
+
+  if (!user) {
+    // Demo mode: return empty list (no coach context)
+    return NextResponse.json([]);
+  }
 
   // Get current coach member
   const { data: member } = await supabase

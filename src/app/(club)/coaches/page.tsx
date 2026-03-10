@@ -2,7 +2,6 @@
 
 import { useClub } from '@/providers/club-provider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,8 +10,7 @@ import { toast } from 'sonner';
 import { Star } from 'lucide-react';
 
 export default function CoachesPage() {
-  const { club, currentMember, role, isLoading: clubLoading } = useClub();
-  const supabase = createClient();
+  const { club, currentMember, role, isLoading: clubLoading, refetch } = useClub();
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -20,14 +18,9 @@ export default function CoachesPage() {
     queryKey: ['coaches', club?.id],
     queryFn: async () => {
       if (!club) return [];
-      const { data } = await supabase
-        .from('club_members')
-        .select('*')
-        .eq('club_id', club.id)
-        .eq('role', 'coach')
-        .eq('is_active', true)
-        .order('display_name', { ascending: true });
-      return data || [];
+      const response = await fetch('/api/members?role=coach');
+      if (!response.ok) throw new Error('Failed to fetch coaches');
+      return response.json();
     },
     enabled: !!club,
   });
@@ -36,13 +29,9 @@ export default function CoachesPage() {
     queryKey: ['lesson-types', club?.id],
     queryFn: async () => {
       if (!club) return [];
-      const { data } = await supabase
-        .from('lesson_types')
-        .select('*')
-        .eq('club_id', club.id)
-        .eq('is_active', true)
-        .order('name', { ascending: true });
-      return data || [];
+      const response = await fetch('/api/lesson-types');
+      if (!response.ok) throw new Error('Failed to fetch lesson types');
+      return response.json();
     },
     enabled: !!club,
   });
@@ -59,7 +48,7 @@ export default function CoachesPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['club-context'] });
+      refetch();
       toast.success('Favorite coach updated');
     },
     onError: (error) => {
@@ -85,20 +74,25 @@ export default function CoachesPage() {
       </div>
 
       {/* Available lesson types */}
-      {lessonTypes.length > 0 && (
-        <div>
-          <h2 className="text-sm font-medium text-muted-foreground mb-2">
-            Available lesson types
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            {lessonTypes.map((lt: Record<string, unknown>) => (
-              <Badge key={lt.id as string} variant="secondary">
-                {lt.name as string}
-              </Badge>
-            ))}
+      {(() => {
+        const visibleLessonTypes = role === 'player'
+          ? lessonTypes.filter((lt: Record<string, unknown>) => lt.category === 'private')
+          : lessonTypes;
+        return visibleLessonTypes.length > 0 ? (
+          <div>
+            <h2 className="text-sm font-medium text-muted-foreground mb-2">
+              Available lesson types
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {visibleLessonTypes.map((lt: Record<string, unknown>) => (
+                <Badge key={lt.id as string} variant="secondary">
+                  {lt.name as string}
+                </Badge>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        ) : null;
+      })()}
 
       {coaches.length === 0 ? (
         <Card>

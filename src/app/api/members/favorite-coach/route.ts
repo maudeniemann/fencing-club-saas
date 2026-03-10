@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getDemoSafeClient } from '@/lib/supabase/demo-client';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { z } from 'zod';
 
@@ -8,24 +8,10 @@ const updateFavoriteSchema = z.object({
 });
 
 export async function PUT(request: NextRequest) {
-  const supabase = await createClient();
-  const admin = createAdminClient();
+  const { member } = await getDemoSafeClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: member } = await supabase
-    .from('club_members')
-    .select('id, role, club_id')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!member) return NextResponse.json({ error: 'No membership' }, { status: 403 });
-
-  // Only players can set favorite coaches
-  if (member.role !== 'player') {
-    return NextResponse.json({ error: 'Only players can favorite coaches' }, { status: 403 });
+  if (!member) {
+    return NextResponse.json({ error: 'No membership' }, { status: 403 });
   }
 
   const body = await request.json();
@@ -35,10 +21,11 @@ export async function PUT(request: NextRequest) {
   }
 
   const { coach_id } = parsed.data;
+  const admin = createAdminClient();
 
   // If setting a favorite, validate it's a coach
   if (coach_id) {
-    const { data: coach } = await supabase
+    const { data: coach } = await admin
       .from('club_members')
       .select('id, role')
       .eq('id', coach_id)

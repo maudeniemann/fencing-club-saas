@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { createClient } from '@/lib/supabase/client';
 import { useClub } from '@/providers/club-provider';
 
 import {
@@ -55,10 +54,10 @@ export default function SettingsPage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!club) throw new Error('No club loaded');
-      const supabase = createClient();
-      const { error } = await supabase
-        .from('clubs')
-        .update({
+      const res = await fetch(`/api/clubs/${club.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           name,
           address_line1: addressLine1 || null,
           address_line2: addressLine2 || null,
@@ -71,10 +70,12 @@ export default function SettingsPage() {
           website: website || null,
           timezone,
           default_commission_split: parseFloat(commissionSplit) || 0,
-        })
-        .eq('id', club.id);
-
-      if (error) throw error;
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to save settings');
+      }
     },
     onSuccess: () => {
       refetch();

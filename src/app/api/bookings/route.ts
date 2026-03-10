@@ -18,21 +18,27 @@ const createBookingSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // TEMP: Force demo mode — always use admin client
+  const queryClient = createAdminClient();
 
   const { searchParams } = new URL(request.url);
   const status = searchParams.get('status');
   const coachId = searchParams.get('coach_id');
+  const startAfter = searchParams.get('start_after');
+  const startBefore = searchParams.get('start_before');
+  const clubId = searchParams.get('club_id');
 
-  let query = supabase
+  let query = queryClient
     .from('bookings')
-    .select('*, lesson_types(name, category, duration_minutes, price_cents), coach:club_members!bookings_coach_member_id_fkey(display_name, avatar_url)')
-    .order('starts_at', { ascending: true });
+    .select('*, lesson_types(name, category, duration_minutes, price_cents, color), coach:club_members!bookings_coach_member_id_fkey(display_name, avatar_url), booking_participants(*, player:club_members!booking_participants_player_member_id_fkey(display_name, id)), venue:venues(name)')
+    .order('starts_at', { ascending: true })
+    .limit(500);
 
   if (status) query = query.eq('status', status);
   if (coachId) query = query.eq('coach_member_id', coachId);
+  if (clubId) query = query.eq('club_id', clubId);
+  if (startAfter) query = query.gte('starts_at', startAfter);
+  if (startBefore) query = query.lte('starts_at', startBefore);
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

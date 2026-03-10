@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getDemoSafeClient } from '@/lib/supabase/demo-client';
 import { z } from 'zod';
 
 const createConversationSchema = z.object({
@@ -9,9 +10,12 @@ const createConversationSchema = z.object({
 });
 
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { client: supabase, user } = await getDemoSafeClient();
+
+  if (!user) {
+    // Demo mode: no user context for conversations
+    return NextResponse.json([]);
+  }
 
   const { data: member } = await supabase
     .from('club_members')

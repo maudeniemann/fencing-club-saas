@@ -1,31 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { getDemoSafeClient } from '@/lib/supabase/demo-client';
 import { z } from 'zod';
 
-const createVenueSchema = z.object({
+const createStripSchema = z.object({
   name: z.string().min(1).max(100),
-  address: z.string().optional(),
 });
 
-export async function GET() {
-  const { client: supabase, member } = await getDemoSafeClient();
-
-  if (!member) {
-    return NextResponse.json([]);
-  }
-
-  const { data } = await supabase
-    .from('venues')
-    .select('*, strips(*)')
-    .eq('club_id', member.club_id)
-    .eq('is_active', true)
-    .order('name');
-  return NextResponse.json(data || []);
-}
-
-export async function POST(request: NextRequest) {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: venueId } = await params;
   const supabase = await createClient();
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -40,12 +27,20 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const parsed = createVenueSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  const parsed = createStripSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
 
   const { data, error } = await supabase
-    .from('venues')
-    .insert({ club_id: member.club_id, ...parsed.data })
+    .from('strips')
+    .insert({
+      club_id: member.club_id,
+      venue_id: venueId,
+      name: parsed.data.name,
+      sort_order: 0,
+      is_active: true,
+    })
     .select()
     .single();
 

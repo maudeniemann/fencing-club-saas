@@ -2,7 +2,6 @@
 
 import { useClub } from '@/providers/club-provider';
 import { useQuery } from '@tanstack/react-query';
-import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { RoleGate } from '@/components/layout/role-gate';
 import { format } from 'date-fns';
@@ -11,60 +10,44 @@ import { Button } from '@/components/ui/button';
 
 export default function DashboardPage() {
   const { club, currentMember, role, isLoading: clubLoading } = useClub();
-  const supabase = createClient();
 
-  // Upcoming bookings for the current user
+  // Upcoming bookings via API route
   const { data: upcomingBookings = [] } = useQuery({
     queryKey: ['dashboard-bookings', currentMember?.id, role],
     queryFn: async () => {
       if (!currentMember || !club) return [];
       const now = new Date().toISOString();
-
-      if (role === 'coach') {
-        const { data } = await supabase
-          .from('bookings')
-          .select('*, lesson_types(name, category, duration_minutes)')
-          .eq('coach_member_id', currentMember.id)
-          .eq('status', 'confirmed')
-          .gte('starts_at', now)
-          .order('starts_at', { ascending: true })
-          .limit(5);
-        return data || [];
-      }
-
-      // Player/parent: get bookings via booking_participants
-      const { data } = await supabase
-        .from('booking_participants')
-        .select('*, bookings(*, lesson_types(name, category, duration_minutes), coach:club_members!bookings_coach_member_id_fkey(display_name))')
-        .eq('player_member_id', currentMember.id)
-        .eq('status', 'confirmed')
-        .order('created_at', { ascending: false })
-        .limit(5);
-      return data || [];
+      const params = new URLSearchParams({
+        club_id: club.id,
+        status: 'confirmed',
+        start_after: now,
+      });
+      if (role === 'coach') params.set('coach_id', currentMember.id);
+      const res = await fetch(`/api/bookings?${params}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data || []).slice(0, 5);
     },
     enabled: !!currentMember && !!club,
   });
 
-  // Admin: quick stats
+  // Admin: quick stats via API routes
   const { data: stats } = useQuery({
     queryKey: ['dashboard-stats', club?.id],
     queryFn: async () => {
       if (!club) return null;
-      const now = new Date().toISOString();
-      const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
-
-      const [membersRes, bookingsRes, revenueRes] = await Promise.all([
-        supabase.from('club_members').select('id', { count: 'exact', head: true }).eq('club_id', club.id).eq('is_active', true),
-        supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('club_id', club.id).eq('status', 'confirmed').gte('starts_at', now),
-        supabase.from('payments').select('amount_cents').eq('club_id', club.id).eq('status', 'succeeded').gte('created_at', startOfMonth),
+      const [membersRes, revenueRes] = await Promise.all([
+        fetch('/api/members').then(r => r.ok ? r.json() : []),
+        fetch('/api/analytics/revenue').then(r => r.ok ? r.json() : null) as Promise<{ monthly_revenue?: { revenue_cents: number }[] } | null>,
       ]);
-
-      const totalRevenue = (revenueRes.data || []).reduce((sum, p) => sum + (p.amount_cents || 0), 0);
-
+      const members = Array.isArray(membersRes) ? membersRes : [];
+      const currentMonthRevenue = revenueRes?.monthly_revenue?.length
+        ? revenueRes.monthly_revenue[revenueRes.monthly_revenue.length - 1]?.revenue_cents || 0
+        : 0;
       return {
-        totalMembers: membersRes.count || 0,
-        upcomingBookings: bookingsRes.count || 0,
-        monthlyRevenue: totalRevenue,
+        totalMembers: members.length,
+        upcomingBookings: 0,
+        monthlyRevenue: currentMonthRevenue,
       };
     },
     enabled: !!club && role === 'admin',
@@ -120,7 +103,7 @@ export default function DashboardPage() {
       {/* Quick actions */}
       <div className="flex flex-wrap gap-3">
         <RoleGate allowedRoles={['player']}>
-          <Link href="/schedule/book">
+          <Link href="/coaches">
             <Button>Book a Lesson</Button>
           </Link>
         </RoleGate>
@@ -152,7 +135,7 @@ export default function DashboardPage() {
             <div className="py-8 text-center text-muted-foreground">
               No upcoming lessons.{' '}
               {role === 'player' && (
-                <Link href="/schedule/book" className="text-primary underline">
+                <Link href="/coaches" className="text-primary underline">
                   Book one now
                 </Link>
               )}

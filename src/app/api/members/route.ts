@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getDemoSafeClient } from '@/lib/supabase/demo-client';
 import { z } from 'zod';
 
 const createMemberSchema = z.object({
@@ -28,9 +29,11 @@ async function getAdminMember(supabase: Awaited<ReturnType<typeof createClient>>
 }
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { client: supabase, member: currentMember } = await getDemoSafeClient();
+
+  if (!currentMember) {
+    return NextResponse.json([]);
+  }
 
   const { searchParams } = new URL(request.url);
   const role = searchParams.get('role');
@@ -38,6 +41,7 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from('club_members')
     .select('*')
+    .eq('club_id', currentMember.club_id)
     .eq('is_active', true)
     .order('display_name');
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getDemoSafeClient } from '@/lib/supabase/demo-client';
 import { z } from 'zod';
 
 const createLessonTypeSchema = z.object({
@@ -14,10 +15,16 @@ const createLessonTypeSchema = z.object({
 });
 
 export async function GET() {
-  const supabase = await createClient();
+  const { client: supabase, member } = await getDemoSafeClient();
+
+  if (!member) {
+    return NextResponse.json([]);
+  }
+
   const { data } = await supabase
     .from('lesson_types')
     .select('*')
+    .eq('club_id', member.club_id)
     .eq('is_active', true)
     .order('name');
   return NextResponse.json(data || []);

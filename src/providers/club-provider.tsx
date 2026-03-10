@@ -39,42 +39,17 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [simulatedRole, setSimulatedRole] = useState<UserRole | null>(null);
 
   const fetchClubData = async () => {
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      setIsLoading(false);
-      return;
+    // Fetch club context via API route (handles both auth and demo mode server-side)
+    try {
+      const res = await fetch('/api/me');
+      if (res.ok) {
+        const { member, club: clubData } = await res.json();
+        if (member) setCurrentMember(member as ClubMember);
+        if (clubData) setClub(clubData as Club);
+      }
+    } catch {
+      // Silently fail — pages will show empty state
     }
-
-    // Get current member (with club_id)
-    const { data: member } = await supabase
-      .from('club_members')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .single();
-
-    if (!member) {
-      setIsLoading(false);
-      return;
-    }
-
-    setCurrentMember(member as ClubMember);
-
-    // Get club details
-    const { data: clubData } = await supabase
-      .from('clubs')
-      .select('*')
-      .eq('id', member.club_id)
-      .single();
-
-    if (clubData) {
-      setClub(clubData as Club);
-    }
-
     setIsLoading(false);
   };
 

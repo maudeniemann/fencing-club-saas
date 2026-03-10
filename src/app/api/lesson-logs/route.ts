@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getDemoSafeClient } from '@/lib/supabase/demo-client';
 import { z } from 'zod';
 
 const createLogSchema = z.object({
@@ -20,9 +21,11 @@ const createLogSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { client: supabase, member } = await getDemoSafeClient();
+
+  if (!member) {
+    return NextResponse.json([]);
+  }
 
   const { searchParams } = new URL(request.url);
   const playerId = searchParams.get('player_id');
@@ -31,6 +34,7 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from('lesson_logs')
     .select('*, coach:club_members!lesson_logs_coach_member_id_fkey(display_name), player:club_members!lesson_logs_player_member_id_fkey(display_name)')
+    .eq('club_id', member.club_id)
     .order('created_at', { ascending: false });
 
   if (playerId) query = query.eq('player_member_id', playerId);

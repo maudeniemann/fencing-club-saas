@@ -2,7 +2,6 @@
 
 import { useClub } from '@/providers/club-provider';
 import { useQuery } from '@tanstack/react-query';
-import { createClient } from '@/lib/supabase/client';
 import { RoleGate } from '@/components/layout/role-gate';
 import { format } from 'date-fns';
 import {
@@ -18,7 +17,6 @@ import type { EarningsForecast } from '@/types';
 
 export default function EarningsPage() {
   const { club, currentMember, role, isLoading: clubLoading } = useClub();
-  const supabase = createClient();
 
   // Fetch completed bookings with payments
   const { data: bookings = [], isLoading: bookingsLoading } = useQuery({
@@ -26,15 +24,18 @@ export default function EarningsPage() {
     queryFn: async () => {
       if (!currentMember || !club) return [];
 
-      const { data } = await supabase
-        .from('bookings')
-        .select('*, lesson_type:lesson_types(name, category, price_cents), participants:booking_participants(*, payment:payments(amount_cents, status))')
-        .eq('coach_member_id', currentMember.id)
-        .eq('club_id', club.id)
-        .in('status', ['completed', 'confirmed', 'no_show'])
-        .order('starts_at', { ascending: false });
-
-      return data || [];
+      const params = new URLSearchParams({
+        coach_id: currentMember.id,
+        club_id: club.id,
+      });
+      const res = await fetch(`/api/bookings?${params}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      // Filter to completed/confirmed/no_show on client side
+      // (the API returns all statuses when no status filter is provided)
+      return data.filter((b: Record<string, unknown>) =>
+        ['completed', 'confirmed', 'no_show'].includes(b.status as string)
+      );
     },
     enabled: !!currentMember && !!club && role === 'coach',
   });
@@ -55,13 +56,9 @@ export default function EarningsPage() {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
   const totalRevenueCents = bookings.reduce((sum: number, b: Record<string, unknown>) => {
-    const participants = (b.participants || []) as Array<Record<string, unknown>>;
+    const participants = (b.booking_participants || []) as Array<Record<string, unknown>>;
     return sum + participants.reduce((pSum: number, p: Record<string, unknown>) => {
-      const payment = p.payment as Record<string, unknown> | null;
-      if (payment && payment.status === 'succeeded') {
-        return pSum + (payment.amount_cents as number || 0);
-      }
-      return pSum;
+      return pSum + ((p.price_charged_cents as number) || 0);
     }, 0);
   }, 0);
 
@@ -184,14 +181,10 @@ export default function EarningsPage() {
                 ) : (
                   <div className="space-y-3">
                     {bookings.slice(0, 20).map((booking: Record<string, unknown>) => {
-                      const lessonType = booking.lesson_type as Record<string, unknown> | null;
-                      const participants = (booking.participants || []) as Array<Record<string, unknown>>;
+                      const lessonType = booking.lesson_types as Record<string, unknown> | null;
+                      const participants = (booking.booking_participants || []) as Array<Record<string, unknown>>;
                       const paymentTotal = participants.reduce((sum: number, p: Record<string, unknown>) => {
-                        const payment = p.payment as Record<string, unknown> | null;
-                        if (payment && payment.status === 'succeeded') {
-                          return sum + (payment.amount_cents as number || 0);
-                        }
-                        return sum;
+                        return sum + ((p.price_charged_cents as number) || 0);
                       }, 0);
 
                       return (

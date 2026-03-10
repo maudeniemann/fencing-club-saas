@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { createClient } from '@/lib/supabase/client';
 import { useClub } from '@/providers/club-provider';
-import type { Venue, Strip } from '@/types';
+import type { Venue } from '@/types';
 
 import {
   Card,
@@ -14,14 +13,9 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-
-interface VenueWithStrips extends Venue {
-  strips: Strip[];
-}
 
 export default function VenuesPage() {
   const { club } = useClub();
@@ -29,7 +23,6 @@ export default function VenuesPage() {
 
   const [newVenueName, setNewVenueName] = useState('');
   const [newVenueAddress, setNewVenueAddress] = useState('');
-  const [newStripNames, setNewStripNames] = useState<Record<string, string>>({});
 
   const {
     data: venues,
@@ -41,7 +34,7 @@ export default function VenuesPage() {
       const res = await fetch('/api/venues');
       if (!res.ok) throw new Error('Failed to fetch venues');
       const data = await res.json();
-      return data as VenueWithStrips[];
+      return data as Venue[];
     },
     enabled: !!club,
   });
@@ -66,40 +59,10 @@ export default function VenuesPage() {
     },
   });
 
-  const addStripMutation = useMutation({
-    mutationFn: async ({ venueId, name }: { venueId: string; name: string }) => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('strips')
-        .insert({
-          club_id: club!.id,
-          venue_id: venueId,
-          name,
-          sort_order: 0,
-          is_active: true,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['venues', club?.id] });
-    },
-  });
-
   const handleAddVenue = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newVenueName.trim()) return;
     addVenueMutation.mutate();
-  };
-
-  const handleAddStrip = (venueId: string) => {
-    const name = newStripNames[venueId]?.trim();
-    if (!name) return;
-    addStripMutation.mutate({ venueId, name });
-    setNewStripNames((prev) => ({ ...prev, [venueId]: '' }));
   };
 
   if (isLoading) {
@@ -113,9 +76,9 @@ export default function VenuesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Venues & Strips</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Venues</h1>
         <p className="text-muted-foreground">
-          Manage your club venues and fencing strips.
+          Manage your club venues.
         </p>
       </div>
 
@@ -173,73 +136,11 @@ export default function VenuesPage() {
           {venues.map((venue) => (
             <Card key={venue.id}>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>{venue.name}</CardTitle>
-                    <CardDescription>
-                      {venue.address || 'No address provided'}
-                    </CardDescription>
-                  </div>
-                  <Badge variant="outline">
-                    {venue.strips?.length ?? 0} strip{(venue.strips?.length ?? 0) !== 1 ? 's' : ''}
-                  </Badge>
-                </div>
+                <CardTitle>{venue.name}</CardTitle>
+                <CardDescription>
+                  {venue.address || 'No address provided'}
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Strips List */}
-                {venue.strips && venue.strips.length > 0 ? (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Strips</Label>
-                    <ul className="space-y-1">
-                      {venue.strips.map((strip) => (
-                        <li
-                          key={strip.id}
-                          className="flex items-center gap-2 text-sm px-3 py-2 bg-muted rounded-md"
-                        >
-                          <span>{strip.name}</span>
-                          <Badge
-                            variant={strip.is_active ? 'default' : 'secondary'}
-                            className="ml-auto text-xs"
-                          >
-                            {strip.is_active ? 'Active' : 'Inactive'}
-                          </Badge>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No strips added yet.
-                  </p>
-                )}
-
-                {/* Add Strip Form */}
-                <div className="flex items-end gap-2 pt-2 border-t">
-                  <div className="space-y-1 flex-1">
-                    <Label className="text-xs">Add Strip</Label>
-                    <Input
-                      placeholder="e.g. Strip 1"
-                      value={newStripNames[venue.id] ?? ''}
-                      onChange={(e) =>
-                        setNewStripNames((prev) => ({
-                          ...prev,
-                          [venue.id]: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={() => handleAddStrip(venue.id)}
-                    disabled={
-                      !newStripNames[venue.id]?.trim() ||
-                      addStripMutation.isPending
-                    }
-                  >
-                    {addStripMutation.isPending ? 'Adding...' : 'Add Strip'}
-                  </Button>
-                </div>
-              </CardContent>
             </Card>
           ))}
         </div>

@@ -36,11 +36,9 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/api/stripe/webhooks') ||
     request.nextUrl.pathname.startsWith('/api/calendar/webhook');
 
+  // TEMP: Allow unauthenticated browsing for demo/preview
   if (!user && !isPublicRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/auth/login';
-    url.searchParams.set('redirectTo', request.nextUrl.pathname);
-    return NextResponse.redirect(url);
+    return supabaseResponse;
   }
 
   // If authenticated, resolve club membership
