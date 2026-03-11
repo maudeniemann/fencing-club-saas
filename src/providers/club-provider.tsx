@@ -17,6 +17,7 @@ interface ClubContextValue {
   actualRole: UserRole | null;
   simulatedRole: UserRole | null;
   setSimulatedRole: (role: UserRole | null) => void;
+  isDemo: boolean;
   isLoading: boolean;
   refetch: () => Promise<void>;
 }
@@ -28,6 +29,7 @@ const ClubContext = createContext<ClubContextValue>({
   actualRole: null,
   simulatedRole: null,
   setSimulatedRole: () => {},
+  isDemo: false,
   isLoading: true,
   refetch: async () => {},
 });
@@ -37,15 +39,17 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [currentMember, setCurrentMember] = useState<ClubMember | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [simulatedRole, setSimulatedRole] = useState<UserRole | null>(null);
+  const [isDemo, setIsDemo] = useState(false);
 
   const fetchClubData = async () => {
     // Fetch club context via API route (handles both auth and demo mode server-side)
     try {
       const res = await fetch('/api/me');
       if (res.ok) {
-        const { member, club: clubData } = await res.json();
-        if (member) setCurrentMember(member as ClubMember);
-        if (clubData) setClub(clubData as Club);
+        const data = await res.json();
+        if (data.member) setCurrentMember(data.member as ClubMember);
+        if (data.club) setClub(data.club as Club);
+        if (data.isDemo) setIsDemo(true);
       }
     } catch {
       // Silently fail — pages will show empty state
@@ -69,6 +73,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
         actualRole,
         simulatedRole,
         setSimulatedRole,
+        isDemo,
         isLoading,
         refetch: fetchClubData,
       }}

@@ -2,6 +2,7 @@ import { ClubProvider } from '@/providers/club-provider';
 import { QueryProvider } from '@/providers/query-provider';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
+import { DemoRoleSwitcher } from '@/components/demo/role-switcher';
 
 export default function ClubLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -23,6 +24,7 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
         </div>
+        <DemoRoleSwitcher />
       </ClubProvider>
     </QueryProvider>
   );

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import { TryDemoButton } from "@/components/demo/try-demo-button";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -83,6 +84,7 @@ export default async function Home() {
             >
               Start Free
             </Link>
+            <TryDemoButton />
             <Link
               href="#features"
               className="inline-flex items-center justify-center rounded-md border border-input bg-background px-8 py-3 text-base font-medium hover:bg-accent hover:text-accent-foreground transition-colors w-full sm:w-auto"

@@ -48,9 +48,14 @@ const adminItems: NavItem[] = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { club, currentMember, role } = useClub();
+  const { club, currentMember, role, isDemo } = useClub();
 
   const handleSignOut = async () => {
+    if (isDemo) {
+      await fetch('/api/demo/end', { method: 'POST' });
+      window.location.href = '/';
+      return;
+    }
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push('/auth/login');
@@ -160,7 +165,7 @@ export function Sidebar() {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
-              Sign Out
+              {isDemo ? 'Exit Demo' : 'Sign Out'}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

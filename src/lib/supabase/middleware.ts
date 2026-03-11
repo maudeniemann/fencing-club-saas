@@ -4,6 +4,23 @@ import { NextResponse, type NextRequest } from 'next/server';
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
+  // Demo mode bypass — skip auth entirely
+  const demoRole = request.cookies.get('demo_role')?.value;
+  if (demoRole && ['admin', 'coach', 'player'].includes(demoRole)) {
+    if (request.nextUrl.pathname.startsWith('/admin') && demoRole !== 'admin') {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+    if (
+      (request.nextUrl.pathname.startsWith('/availability') ||
+        request.nextUrl.pathname.startsWith('/earnings')) &&
+      demoRole !== 'coach' &&
+      demoRole !== 'admin'
+    ) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+    return supabaseResponse;
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
