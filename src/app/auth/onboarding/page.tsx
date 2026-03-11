@@ -1,19 +1,34 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { UserRole } from '@/types';
 
-type OnboardingStep = 'role' | 'club-create' | 'club-join';
+type OnboardingStep = 'role' | 'club-choice' | 'club-create' | 'club-join';
 
-export default function OnboardingPage() {
+const VALID_ROLES: UserRole[] = ['admin', 'coach', 'player'];
+
+function getInitialStep(role: string | null): { step: OnboardingStep; role: UserRole | null } {
+  if (role && VALID_ROLES.includes(role as UserRole)) {
+    const validRole = role as UserRole;
+    if (validRole === 'admin') return { step: 'club-choice', role: validRole };
+    return { step: 'club-join', role: validRole };
+  }
+  return { step: 'role', role: null };
+}
+
+function OnboardingForm() {
   const router = useRouter();
-  const [step, setStep] = useState<OnboardingStep>('role');
-  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
+  const searchParams = useSearchParams();
+  const roleParam = searchParams.get('role');
+
+  const initial = getInitialStep(roleParam);
+  const [step, setStep] = useState<OnboardingStep>(initial.step);
+  const [selectedRole, setSelectedRole] = useState<UserRole | null>(initial.role);
   const [clubName, setClubName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -65,6 +80,23 @@ export default function OnboardingPage() {
     }
   };
 
+  const roleLabel = selectedRole === 'admin' ? 'Admin' : selectedRole === 'coach' ? 'Coach' : selectedRole === 'player' ? 'Player' : '';
+
+  const goBack = () => {
+    if (step === 'club-create' || step === 'club-join') {
+      // If role came from URL, go back to club-choice (admin) or role step
+      if (roleParam && selectedRole === 'admin') {
+        setStep('club-choice');
+      } else {
+        setStep('role');
+        setSelectedRole(null);
+      }
+    } else if (step === 'club-choice') {
+      setStep('role');
+      setSelectedRole(null);
+    }
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-lg border border-border bg-white shadow-lg">
@@ -72,8 +104,9 @@ export default function OnboardingPage() {
           <CardTitle className="text-2xl font-bold">Welcome to Fencing Club Manager</CardTitle>
           <CardDescription>
             {step === 'role' && 'How will you be using the platform?'}
+            {step === 'club-choice' && 'What would you like to do?'}
             {step === 'club-create' && 'Create your club'}
-            {step === 'club-join' && 'Join an existing club'}
+            {step === 'club-join' && `Join an existing club as ${roleLabel}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -83,6 +116,7 @@ export default function OnboardingPage() {
             </div>
           )}
 
+          {/* Step 1: Role selection (shown only if no role param) */}
           {step === 'role' && (
             <div className="space-y-3">
               {([
@@ -94,7 +128,7 @@ export default function OnboardingPage() {
                   key={role}
                   onClick={() => {
                     setSelectedRole(role);
-                    setStep(role === 'admin' ? 'club-create' : 'club-join');
+                    setStep(role === 'admin' ? 'club-choice' : 'club-join');
                   }}
                   className="w-full rounded-lg border border-border bg-white p-4 text-left shadow-sm transition-all hover:border-primary hover:shadow-md"
                 >
@@ -105,6 +139,38 @@ export default function OnboardingPage() {
             </div>
           )}
 
+          {/* Step 2 (admin only): Create or Join choice */}
+          {step === 'club-choice' && (
+            <div className="space-y-3">
+              <button
+                onClick={() => setStep('club-create')}
+                className="w-full rounded-lg border border-border bg-white p-4 text-left shadow-sm transition-all hover:border-primary hover:shadow-md"
+              >
+                <div className="font-medium">Create a New Club</div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  Start fresh and set up your own fencing club.
+                </div>
+              </button>
+              <button
+                onClick={() => setStep('club-join')}
+                className="w-full rounded-lg border border-border bg-white p-4 text-left shadow-sm transition-all hover:border-primary hover:shadow-md"
+              >
+                <div className="font-medium">Join an Existing Club</div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  Join a club that&apos;s already on the platform as an admin.
+                </div>
+              </button>
+              <Button
+                variant="ghost"
+                onClick={goBack}
+                className="w-full"
+              >
+                Back
+              </Button>
+            </div>
+          )}
+
+          {/* Create club form */}
           {step === 'club-create' && (
             <div className="space-y-4">
               <div>
@@ -126,7 +192,7 @@ export default function OnboardingPage() {
               </Button>
               <Button
                 variant="ghost"
-                onClick={() => setStep('role')}
+                onClick={goBack}
                 className="w-full"
               >
                 Back
@@ -134,6 +200,7 @@ export default function OnboardingPage() {
             </div>
           )}
 
+          {/* Join club form */}
           {step === 'club-join' && (
             <div className="space-y-4">
               <div>
@@ -154,11 +221,11 @@ export default function OnboardingPage() {
                 disabled={!joinCode.trim() || loading}
                 className="w-full"
               >
-                {loading ? 'Joining...' : `Join as ${selectedRole}`}
+                {loading ? 'Joining...' : `Join as ${roleLabel}`}
               </Button>
               <Button
                 variant="ghost"
-                onClick={() => setStep('role')}
+                onClick={goBack}
                 className="w-full"
               >
                 Back
@@ -168,5 +235,13 @@ export default function OnboardingPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense>
+      <OnboardingForm />
+    </Suspense>
   );
 }

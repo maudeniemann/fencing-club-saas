@@ -9,13 +9,16 @@ import { Suspense } from 'react';
 function LoginForm() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirectTo') || '/dashboard';
+  const role = searchParams.get('role') || '';
 
   const handleGoogleLogin = async () => {
     const supabase = createClient();
+    const callbackParams = new URLSearchParams({ redirectTo });
+    if (role) callbackParams.set('role', role);
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?redirectTo=${encodeURIComponent(redirectTo)}`,
+        redirectTo: `${window.location.origin}/auth/callback?${callbackParams.toString()}`,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',

@@ -5,6 +5,7 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const redirectTo = searchParams.get('redirectTo') || '/dashboard';
+  const role = searchParams.get('role') || '';
 
   if (code) {
     const supabase = await createClient();
@@ -25,8 +26,11 @@ export async function GET(request: Request) {
           .single();
 
         if (!membership) {
-          // New user — redirect to onboarding
-          return NextResponse.redirect(`${origin}/auth/onboarding`);
+          // New user — redirect to onboarding with role if provided
+          const onboardingUrl = role
+            ? `${origin}/auth/onboarding?role=${encodeURIComponent(role)}`
+            : `${origin}/auth/onboarding`;
+          return NextResponse.redirect(onboardingUrl);
         }
       }
 

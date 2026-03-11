@@ -55,7 +55,7 @@ export default async function Home() {
               Log In
             </Link>
             <Link
-              href="/auth/login"
+              href="#get-started"
               className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               Get Started
@@ -78,7 +78,7 @@ export default async function Home() {
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
-              href="/auth/login"
+              href="#get-started"
               className="inline-flex items-center justify-center rounded-md bg-primary px-8 py-3 text-base font-medium text-primary-foreground hover:bg-primary/90 transition-colors w-full sm:w-auto"
             >
               Start Free
@@ -88,6 +88,78 @@ export default async function Home() {
               className="inline-flex items-center justify-center rounded-md border border-input bg-background px-8 py-3 text-base font-medium hover:bg-accent hover:text-accent-foreground transition-colors w-full sm:w-auto"
             >
               Learn More
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Get Started — Role Selection */}
+      <section id="get-started" className="py-20 sm:py-28 border-b">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
+              How Will You Use the Platform?
+            </h2>
+            <p className="mt-4 text-lg text-muted-foreground">
+              Select your role to get started. You can always change this later.
+            </p>
+          </div>
+          <div className="grid gap-6 sm:grid-cols-3">
+            <Link
+              href="/auth/login?role=admin"
+              className="group rounded-xl border-2 border-border bg-white p-6 text-center space-y-3 transition-all hover:border-primary hover:shadow-lg"
+            >
+              <div className="mx-auto inline-flex items-center justify-center rounded-full bg-primary/10 p-4 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                  <path d="M2 17l10 5 10-5" />
+                  <path d="M2 12l10 5 10-5" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold">Club Admin</h3>
+              <p className="text-sm text-muted-foreground">
+                Create or join a club as an administrator
+              </p>
+              <div className="inline-flex items-center justify-center rounded-md bg-primary px-6 py-2 text-sm font-medium text-primary-foreground group-hover:bg-primary/90 transition-colors">
+                Get Started
+              </div>
+            </Link>
+            <Link
+              href="/auth/login?role=coach"
+              className="group rounded-xl border-2 border-border bg-white p-6 text-center space-y-3 transition-all hover:border-primary hover:shadow-lg"
+            >
+              <div className="mx-auto inline-flex items-center justify-center rounded-full bg-primary/10 p-4 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7">
+                  <path d="M14.5 2l6 6-8 8-6-6z" />
+                  <path d="M9 12l-5 5" />
+                  <path d="M4 17l-1 5 5-1" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold">Coach</h3>
+              <p className="text-sm text-muted-foreground">
+                Join a club to teach and manage lessons
+              </p>
+              <div className="inline-flex items-center justify-center rounded-md bg-primary px-6 py-2 text-sm font-medium text-primary-foreground group-hover:bg-primary/90 transition-colors">
+                Get Started
+              </div>
+            </Link>
+            <Link
+              href="/auth/login?role=player"
+              className="group rounded-xl border-2 border-border bg-white p-6 text-center space-y-3 transition-all hover:border-primary hover:shadow-lg"
+            >
+              <div className="mx-auto inline-flex items-center justify-center rounded-full bg-primary/10 p-4 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold">Player</h3>
+              <p className="text-sm text-muted-foreground">
+                Join a club to book lessons and track progress
+              </p>
+              <div className="inline-flex items-center justify-center rounded-md bg-primary px-6 py-2 text-sm font-medium text-primary-foreground group-hover:bg-primary/90 transition-colors">
+                Get Started
+              </div>
             </Link>
           </div>
         </div>
@@ -241,7 +313,7 @@ export default async function Home() {
           </p>
           <div className="mt-8">
             <Link
-              href="/auth/login"
+              href="#get-started"
               className="inline-flex items-center justify-center rounded-md bg-white text-primary px-8 py-3 text-base font-medium hover:bg-white/90 transition-colors"
             >
               Get Started Free
