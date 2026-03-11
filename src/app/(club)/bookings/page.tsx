@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
 export default function BookingsPage() {
-  redirect('/schedule');
+  redirect('/bookings/history');
 }

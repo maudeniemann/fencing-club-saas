@@ -1,8 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getAuthenticatedMember } from '@/lib/auth/get-authenticated-member';
 import { createRefund } from '@/lib/stripe/payments';
 import { z } from 'zod';
+
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: disputeId } = await params;
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member, client } = auth;
+
+  if (member.role !== 'admin') {
+    return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+  }
+
+  const { data, error } = await client
+    .from('disputes')
+    .select(`
+      *,
+      bookings(id, booking_number, starts_at, ends_at, status, lesson_types(name, category)),
+      payments(*),
+      filed_by:club_members!disputes_filed_by_member_id_fkey(id, display_name, avatar_url, role)
+    `)
+    .eq('id', disputeId)
+    .eq('club_id', member.club_id)
+    .single();
+
+  if (error || !data) {
+    return NextResponse.json({ error: 'Dispute not found' }, { status: 404 });
+  }
+
+  return NextResponse.json(data);
+}
 
 const resolveDisputeSchema = z.object({
   status: z.enum(['resolved_for_player', 'resolved_for_club', 'dismissed']),

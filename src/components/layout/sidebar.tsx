@@ -27,6 +27,7 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: '📊' },
   { label: 'Schedule', href: '/schedule', icon: '📅' },
   { label: 'Coaches', href: '/coaches', icon: '🤺' },
+  { label: 'My Bookings', href: '/bookings/history', icon: '📋' },
   { label: 'Waitlist', href: '/waitlist', icon: '⏳', roles: ['player'] },
   { label: 'Messages', href: '/messages', icon: '💬' },
   { label: 'Lesson Requests', href: '/lesson-requests', icon: '📝', roles: ['coach', 'admin'] },

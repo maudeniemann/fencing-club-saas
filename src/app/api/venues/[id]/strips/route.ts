@@ -1,10 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedMember } from '@/lib/auth/get-authenticated-member';
 import { z } from 'zod';
 
 const createStripSchema = z.object({
   name: z.string().min(1).max(100),
 });
+
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: venueId } = await params;
+  const auth = await getAuthenticatedMember();
+  if (auth.error) return auth.error;
+  const { member, client } = auth;
+
+  const { data } = await client
+    .from('strips')
+    .select('*')
+    .eq('venue_id', venueId)
+    .eq('club_id', member.club_id)
+    .eq('is_active', true)
+    .order('sort_order');
+
+  return NextResponse.json(data || []);
+}
 
 export async function POST(
   request: NextRequest,

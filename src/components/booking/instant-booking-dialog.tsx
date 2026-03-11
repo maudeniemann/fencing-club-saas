@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parse } from 'date-fns';
+import { loadStripe } from '@stripe/stripe-js';
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,11 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useClub } from '@/providers/club-provider';
+import Link from 'next/link';
+
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
+);
 
 interface SlotInfo {
   date: string;
@@ -56,6 +62,21 @@ export function InstantBookingDialog({
   const { currentMember } = useClub();
   const queryClient = useQueryClient();
   const [lessonTypeId, setLessonTypeId] = useState<string>('');
+
+  const hasPaymentMethod = !!currentMember?.stripe_default_payment_method_id;
+
+  // Fetch saved payment method details
+  const { data: pmData } = useQuery({
+    queryKey: ['payment-method'],
+    queryFn: async () => {
+      const res = await fetch('/api/payments/payment-method');
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: open && hasPaymentMethod,
+  });
+
+  const savedCard = pmData?.payment_method;
 
   // Fetch lesson types for the club
   const { data: lessonTypes = [] } = useQuery({
@@ -102,9 +123,29 @@ export function InstantBookingDialog({
         throw new Error(err.error || 'Booking failed');
       }
 
-      return res.json();
+      const data = await res.json();
+
+      // Confirm payment with Stripe if a payment intent was created
+      if (data.payment_intent_client_secret) {
+        const stripe = await stripePromise;
+        if (stripe) {
+          const { error } = await stripe.confirmPayment({
+            clientSecret: data.payment_intent_client_secret,
+            confirmParams: {
+              return_url: `${window.location.origin}/bookings/${data.booking.id}`,
+            },
+            redirect: 'if_required',
+          });
+          if (error) {
+            toast.error(error.message || 'Payment confirmation failed');
+            // Booking was created but payment failed — still navigate to it
+          }
+        }
+      }
+
+      return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['available-slots'] });
       queryClient.invalidateQueries({ queryKey: ['coach-availability'] });
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
@@ -173,6 +214,29 @@ export function InstantBookingDialog({
                 ${(selectedType.price_cents / 100).toFixed(2)}
               </span>
             </div>
+          )}
+
+          {/* Payment method info */}
+          {selectedType && (
+            hasPaymentMethod ? (
+              <div className="rounded-lg border px-3 py-2 text-sm flex items-center justify-between">
+                <span className="text-muted-foreground">Payment</span>
+                <span className="font-medium">
+                  {savedCard
+                    ? `${savedCard.brand} ending in ${savedCard.last4}`
+                    : 'Card on file'}
+                </span>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:bg-yellow-950/30 px-3 py-2 text-sm space-y-1">
+                <p className="text-yellow-800 dark:text-yellow-200">
+                  No payment method on file. Add one to enable automatic billing.
+                </p>
+                <Link href="/account" className="text-primary text-xs underline">
+                  Add Payment Method
+                </Link>
+              </div>
+            )
           )}
 
           {/* Actions */}

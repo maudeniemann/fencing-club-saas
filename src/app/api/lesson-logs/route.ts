@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const playerId = searchParams.get('player_id');
   const coachId = searchParams.get('coach_id');
+  const bookingId = searchParams.get('booking_id');
 
   let query = client
     .from('lesson_logs')
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
 
   if (playerId) query = query.eq('player_member_id', playerId);
   if (coachId) query = query.eq('coach_member_id', coachId);
+  if (bookingId) query = query.eq('booking_id', bookingId);
 
   const { data } = await query.limit(50);
   return NextResponse.json(data || []);

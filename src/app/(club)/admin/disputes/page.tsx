@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useClub } from '@/providers/club-provider';
 import { format } from 'date-fns';
+import Link from 'next/link';
 import type { DisputeStatus } from '@/types';
 
 import {
@@ -226,6 +227,14 @@ export default function DisputesPage() {
                     </p>
                   </div>
                 )}
+
+                <div className="pt-1">
+                  <Link href={`/admin/disputes/${dispute.id}`}>
+                    <Button size="sm" variant="ghost">
+                      View Details
+                    </Button>
+                  </Link>
+                </div>
 
                 {/* Resolve action for open disputes */}
                 {(dispute.status === 'open' ||

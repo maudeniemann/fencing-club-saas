@@ -20,6 +20,7 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import { PaymentMethodForm } from '@/components/payments/payment-method-form';
 
 export default function AccountPage() {
   const { currentMember, role, isLoading: clubLoading, refetch } = useClub();
@@ -237,6 +238,21 @@ export default function AccountPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Payment Method (players only) */}
+      {role === 'player' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Payment Method</CardTitle>
+            <CardDescription>
+              Manage your payment method for booking lessons
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PaymentMethodForm />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Auto-billing (players only) */}
       {role === 'player' && (

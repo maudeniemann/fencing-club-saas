@@ -130,6 +130,13 @@ export default function CoachesPage() {
                     <Button
                       size="sm"
                       variant="outline"
+                      onClick={() => router.push(`/coaches/${coach.id}`)}
+                    >
+                      Profile
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
                       className="flex-1"
                       onClick={() => router.push(`/coaches/${coach.id}/availability`)}
                     >

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useClub } from '@/providers/club-provider';
 import type { LessonType } from '@/types';
+import { toast } from 'sonner';
 
 import {
   Card,
@@ -25,6 +26,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 const categoryBadgeColors: Record<string, string> = {
   private: 'bg-violet-100 text-violet-800 border-violet-200',
@@ -44,6 +63,17 @@ export default function LessonTypesPage() {
   const [currency, setCurrency] = useState('usd');
   const [color, setColor] = useState('#3b82f6');
   const [description, setDescription] = useState('');
+
+  // Edit dialog state
+  const [editLt, setEditLt] = useState<LessonType | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editCategory, setEditCategory] = useState('private');
+  const [editDuration, setEditDuration] = useState('60');
+  const [editMaxParticipants, setEditMaxParticipants] = useState('1');
+  const [editPriceDollars, setEditPriceDollars] = useState('');
+  const [editCurrency, setEditCurrency] = useState('usd');
+  const [editColor, setEditColor] = useState('#3b82f6');
+  const [editDescription, setEditDescription] = useState('');
 
   const {
     data: lessonTypes,
@@ -90,13 +120,74 @@ export default function LessonTypesPage() {
       setCurrency('usd');
       setColor('#3b82f6');
       setDescription('');
+      toast.success('Lesson type added');
     },
+    onError: () => toast.error('Failed to add lesson type'),
+  });
+
+  const editMutation = useMutation({
+    mutationFn: async () => {
+      if (!editLt) throw new Error('No lesson type selected');
+      const priceCents = Math.round(parseFloat(editPriceDollars) * 100);
+      const res = await fetch(`/api/lesson-types/${editLt.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editName,
+          category: editCategory,
+          duration_minutes: parseInt(editDuration, 10),
+          max_participants: parseInt(editMaxParticipants, 10),
+          price_cents: priceCents,
+          currency: editCurrency,
+          color: editColor,
+          description: editDescription || null,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to update lesson type');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lesson-types', club?.id] });
+      setEditLt(null);
+      toast.success('Lesson type updated');
+    },
+    onError: () => toast.error('Failed to update lesson type'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/lesson-types/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete lesson type');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lesson-types', club?.id] });
+      toast.success('Lesson type deleted');
+    },
+    onError: () => toast.error('Failed to delete lesson type'),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !priceDollars) return;
     addMutation.mutate();
+  };
+
+  const openEdit = (lt: LessonType) => {
+    setEditLt(lt);
+    setEditName(lt.name);
+    setEditCategory(lt.category);
+    setEditDuration(String(lt.duration_minutes));
+    setEditMaxParticipants(String(lt.max_participants));
+    setEditPriceDollars((lt.price_cents / 100).toFixed(2));
+    setEditCurrency(lt.currency);
+    setEditColor(lt.color || '#3b82f6');
+    setEditDescription(lt.description || '');
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editName.trim() || !editPriceDollars) return;
+    editMutation.mutate();
   };
 
   if (isLoading) {
@@ -251,7 +342,7 @@ export default function LessonTypesPage() {
                 </div>
                 <CardDescription>{lt.description ?? 'No description'}</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <Badge
                     variant="outline"
@@ -272,11 +363,149 @@ export default function LessonTypesPage() {
                     {lt.currency.toUpperCase()}
                   </span>
                 </p>
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openEdit(lt)}
+                  >
+                    Edit
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm">
+                        Delete
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete {lt.name}?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will remove the lesson type. Existing bookings
+                          using this type will not be affected.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => deleteMutation.mutate(lt.id)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editLt} onOpenChange={(o) => !o && setEditLt(null)}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Lesson Type</DialogTitle>
+            <DialogDescription>Update lesson type details and pricing.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select value={editCategory} onValueChange={setEditCategory}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="private">Private</SelectItem>
+                    <SelectItem value="group">Group</SelectItem>
+                    <SelectItem value="clinic">Clinic</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Duration (minutes)</Label>
+                <Input
+                  type="number"
+                  min="15"
+                  step="15"
+                  value={editDuration}
+                  onChange={(e) => setEditDuration(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Max Participants</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={editMaxParticipants}
+                  onChange={(e) => setEditMaxParticipants(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Price ($)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editPriceDollars}
+                  onChange={(e) => setEditPriceDollars(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Currency</Label>
+                <Input
+                  value={editCurrency}
+                  onChange={(e) => setEditCurrency(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Color</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="color"
+                    value={editColor}
+                    onChange={(e) => setEditColor(e.target.value)}
+                    className="w-16 h-10 p-1 cursor-pointer"
+                  />
+                  <span className="text-sm text-muted-foreground">{editColor}</span>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Textarea
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditLt(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!editName.trim() || !editPriceDollars || editMutation.isPending}
+              >
+                {editMutation.isPending ? 'Saving...' : 'Save'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
