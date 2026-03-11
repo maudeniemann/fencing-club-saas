@@ -16,7 +16,7 @@ export function StripeProvider({ children }: { children: ReactNode }) {
         appearance: {
           theme: 'stripe',
           variables: {
-            colorPrimary: '#3b68d9',
+            colorPrimary: '#D4707A',
             borderRadius: '8px',
           },
         },
