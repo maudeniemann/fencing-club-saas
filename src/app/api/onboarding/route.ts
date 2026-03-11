@@ -57,7 +57,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: memberError.message }, { status: 500 });
       }
 
-      return NextResponse.json({ success: true });
+      return NextResponse.json({ success: true, clubId: club.id });
     }
 
     if (action === 'join-club') {

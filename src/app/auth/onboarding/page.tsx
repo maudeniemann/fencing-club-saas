@@ -49,7 +49,7 @@ function OnboardingForm() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create club');
 
-      router.push('/dashboard');
+      router.push(`/auth/setup-club?clubId=${data.clubId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create club');
     } finally {
