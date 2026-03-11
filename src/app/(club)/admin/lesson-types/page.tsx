@@ -42,7 +42,7 @@ export default function LessonTypesPage() {
   const [maxParticipants, setMaxParticipants] = useState('1');
   const [priceDollars, setPriceDollars] = useState('');
   const [currency, setCurrency] = useState('usd');
-  const [color, setColor] = useState('#D4707A');
+  const [color, setColor] = useState('#3b82f6');
   const [description, setDescription] = useState('');
 
   const {
@@ -88,7 +88,7 @@ export default function LessonTypesPage() {
       setMaxParticipants('1');
       setPriceDollars('');
       setCurrency('usd');
-      setColor('#D4707A');
+      setColor('#3b82f6');
       setDescription('');
     },
   });
